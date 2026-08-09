@@ -21,6 +21,9 @@ export default function FabricsSettings({ initialFabrics }: Props) {
   const [fabrics, setFabrics] = useState(initialFabrics)
   const [name, setName] = useState('')
   const [unit, setUnit] = useState<FabricUnit | ''>('metre')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editUnit, setEditUnit] = useState<FabricUnit | ''>('metre')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -106,6 +109,42 @@ export default function FabricsSettings({ initialFabrics }: Props) {
     router.refresh()
   }
 
+  function startEdit(f: FabricRow) {
+    setEditingId(f.id)
+    setEditName(f.name)
+    setEditUnit((f.unit as FabricUnit) || 'metre')
+    setError(null)
+    setMessage(null)
+  }
+
+  async function saveEdit(f: FabricRow) {
+    const trimmed = editName.trim()
+    if (!trimmed) { setError('Kumaş adı zorunlu.'); return }
+    if (!editUnit) { setError('Birim seçiniz.'); return }
+    if (fabrics.some((x) => x.id !== f.id && x.name.toLowerCase() === trimmed.toLowerCase())) {
+      setError('Bu isimde kumaş zaten var.')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    const { error: upErr } = await supabase
+      .from('fabrics')
+      .update({ name: trimmed, unit: editUnit })
+      .eq('id', f.id)
+    setLoading(false)
+    if (upErr) { setError(upErr.message); return }
+
+    setFabrics((prev) =>
+      prev
+        .map((x) => (x.id === f.id ? { ...x, name: trimmed, unit: editUnit } : x))
+        .sort((a, b) => a.name.localeCompare(b.name, 'tr'))
+    )
+    setEditingId(null)
+    setMessage(`“${trimmed}” güncellendi.`)
+    router.refresh()
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100">
@@ -159,19 +198,64 @@ export default function FabricsSettings({ initialFabrics }: Props) {
           <li className="px-5 py-8 text-sm text-gray-400 text-center">Henüz kumaş yok.</li>
         ) : (
           fabrics.map((f) => (
-            <li key={f.id} className="px-5 py-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-gray-900">{f.name}</p>
-                <p className="text-[11px] text-gray-400">{unitLabel(f.unit) || '—'}</p>
+            <li key={f.id} className="px-5 py-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{f.name}</p>
+                  <p className="text-[11px] text-gray-400">{unitLabel(f.unit) || '—'}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {editingId !== f.id && (
+                    <button
+                      type="button"
+                      onClick={() => startEdit(f)}
+                      disabled={loading}
+                      className="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                    >
+                      Düzenle
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(f)}
+                    disabled={loading}
+                    className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                  >
+                    Sil
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => handleDelete(f)}
-                disabled={loading}
-                className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
-              >
-                Sil
-              </button>
+              {editingId === f.id && (
+                <div className="flex flex-wrap gap-2 items-center rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className={`${inputCls} max-w-[12rem]`}
+                    disabled={loading}
+                  />
+                  <select
+                    value={editUnit}
+                    onChange={(e) => setEditUnit(e.target.value as FabricUnit)}
+                    className={`${inputCls} max-w-[7rem]`}
+                    disabled={loading}
+                  >
+                    <option value="metre">Metre</option>
+                    <option value="kg">Kg</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => saveEdit(f)}
+                    disabled={loading}
+                    className="text-xs font-medium px-3 py-1.5 bg-gray-900 text-white rounded-md disabled:opacity-50"
+                  >
+                    Kaydet
+                  </button>
+                  <button type="button" onClick={() => setEditingId(null)} className="text-xs text-gray-500">
+                    Vazgeç
+                  </button>
+                </div>
+              )}
             </li>
           ))
         )}

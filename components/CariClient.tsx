@@ -94,6 +94,11 @@ export default function CariClient({ parties: initialParties, entries: initialEn
     if (!amount.trim() || isNaN(amt) || amt <= 0) { setError('Geçerli tutar giriniz.'); return }
     if (!occurredAt) { setError('Tarih zorunlu.'); return }
     if (showPaymentMethod && !paymentMethod) { setError('Ödeme şekli seçiniz.'); return }
+    const isManual = entryType === 'borc' || entryType === 'alacak'
+    if (isManual && !notes.trim()) {
+      setError('Açıklama zorunlu (ör. Boyahane ücreti).')
+      return
+    }
 
     setLoading(true)
     setError(null)
@@ -240,13 +245,19 @@ export default function CariClient({ parties: initialParties, entries: initialEn
               </div>
 
               <form onSubmit={handlePayment} className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-gray-100 pt-4">
+                <div className="sm:col-span-2">
+                  <p className="text-xs text-gray-500 mb-2">
+                    Kumaş dışı borç/alacak için <span className="font-medium text-gray-700">Borç ekle</span> /{' '}
+                    <span className="font-medium text-gray-700">Alacak ekle</span> seçin (ör. boyahane).
+                  </p>
+                </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">İşlem</label>
                   <select value={entryType} onChange={(e) => setEntryType(e.target.value as AccountEntryType)} className={inputCls} disabled={loading}>
                     <option value="odeme">Ödeme (borç azalt)</option>
                     <option value="tahsilat">Tahsilat (alacak azalt)</option>
-                    <option value="borc">Borç ekle</option>
-                    <option value="alacak">Alacak ekle</option>
+                    <option value="borc">Borç ekle (manuel)</option>
+                    <option value="alacak">Alacak ekle (manuel)</option>
                   </select>
                 </div>
                 <div>
@@ -273,8 +284,17 @@ export default function CariClient({ parties: initialParties, entries: initialEn
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Not</label>
-                    <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} disabled={loading} placeholder="Opsiyonel" />
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Açıklama <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className={inputCls}
+                      disabled={loading}
+                      placeholder="ör. Boyahane ücreti"
+                    />
                   </div>
                 )}
                 {showPaymentMethod && (

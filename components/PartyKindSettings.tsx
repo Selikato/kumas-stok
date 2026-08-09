@@ -31,23 +31,21 @@ type Draft = {
   openingSide: 'borc' | 'alacak'
 }
 
-const EMPTY: Draft = {
-  name: '',
-  phone: '',
-  openingAmount: '',
-  openingSide: 'borc',
+function emptyDraft(kind: 'tedarikci' | 'musteri'): Draft {
+  return {
+    name: '',
+    phone: '',
+    openingAmount: '',
+    openingSide: kind === 'tedarikci' ? 'borc' : 'alacak',
+  }
 }
 
 export default function PartyKindSettings({ kind, title, subtitle, initialParties }: Props) {
   const router = useRouter()
   const [parties, setParties] = useState(initialParties)
-  const [draft, setDraft] = useState<Draft>({
-    ...EMPTY,
-    openingSide: kind === 'tedarikci' ? 'borc' : 'alacak',
-  })
+  const [draft, setDraft] = useState<Draft>(() => emptyDraft(kind))
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editAmount, setEditAmount] = useState('')
-  const [editSide, setEditSide] = useState<'borc' | 'alacak'>('borc')
+  const [edit, setEdit] = useState<Draft>(emptyDraft(kind))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -66,32 +64,36 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
   )
 
   const selectCols = 'id, name, kind, phone, notes, opening_balance'
+  const helpText =
+    kind === 'tedarikci'
+      ? 'Örn. tedarikçiye 300.000 ₺ borç → tutar 300000, yön Borç'
+      : 'Örn. müşteriden 50.000 ₺ alacak → tutar 50000, yön Alacak'
+
+  function parseOpening(amountStr: string, side: 'borc' | 'alacak'): number | null {
+    const amt = amountStr.trim() ? parseFloat(amountStr) : 0
+    if (amountStr.trim() && (isNaN(amt) || amt < 0)) return null
+    return toOpeningBalance(amt || 0, side)
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = draft.name.trim()
     if (!trimmed) { setError('İsim zorunlu.'); return }
-    const amt = draft.openingAmount.trim() ? parseFloat(draft.openingAmount) : 0
-    if (draft.openingAmount.trim() && (isNaN(amt) || amt < 0)) {
-      setError('Geçerli başlangıç bakiyesi giriniz.')
-      return
-    }
-    const opening = toOpeningBalance(amt || 0, draft.openingSide)
+    const opening = parseOpening(draft.openingAmount, draft.openingSide)
+    if (opening == null) { setError('Geçerli başlangıç bakiyesi giriniz.'); return }
 
     setLoading(true)
     setError(null)
     setMessage(null)
 
-    const payload: Record<string, unknown> = {
-      name: trimmed,
-      kind,
-      phone: draft.phone.trim() || null,
-      opening_balance: opening,
-    }
-
     let { data, error: insertErr } = await supabase
       .from('parties')
-      .insert(payload)
+      .insert({
+        name: trimmed,
+        kind,
+        phone: draft.phone.trim() || null,
+        opening_balance: opening,
+      })
       .select(selectCols)
       .single()
 
@@ -102,9 +104,7 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
         .select('id, name, kind, phone, notes')
         .single()
       insertErr = fallback.error
-      data = fallback.data
-        ? { ...fallback.data, opening_balance: 0 }
-        : null
+      data = fallback.data ? { ...fallback.data, opening_balance: 0 } : null
       if (!insertErr) {
         setMessage(`“${trimmed}” eklendi. (Başlangıç bakiyesi için SQL migration gerekli)`)
       }
@@ -121,47 +121,68 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
     }
 
     setParties((prev) => [...prev, data as Party])
-    setDraft({ ...EMPTY, openingSide: kind === 'tedarikci' ? 'borc' : 'alacak' })
-    if (!message) setMessage(`“${trimmed}” eklendi.`)
+    setDraft(emptyDraft(kind))
+    setMessage((m) => m || `“${trimmed}” eklendi.`)
     router.refresh()
   }
 
   function startEdit(p: Party) {
     const o = fromOpeningBalance(Number(p.opening_balance) || 0)
     setEditingId(p.id)
-    setEditAmount(o.amount ? String(o.amount) : '')
-    setEditSide(o.side)
+    setEdit({
+      name: p.name,
+      phone: p.phone || '',
+      openingAmount: o.amount ? String(o.amount) : '',
+      openingSide: o.side,
+    })
     setError(null)
     setMessage(null)
   }
 
-  async function saveOpening(p: Party) {
-    const amt = editAmount.trim() ? parseFloat(editAmount) : 0
-    if (editAmount.trim() && (isNaN(amt) || amt < 0)) {
-      setError('Geçerli tutar giriniz.')
-      return
-    }
-    const opening = toOpeningBalance(amt || 0, editSide)
+  async function saveEdit(p: Party) {
+    const trimmed = edit.name.trim()
+    if (!trimmed) { setError('İsim zorunlu.'); return }
+    const opening = parseOpening(edit.openingAmount, edit.openingSide)
+    if (opening == null) { setError('Geçerli başlangıç bakiyesi giriniz.'); return }
+
     setLoading(true)
     setError(null)
-    const { error: upErr } = await supabase
-      .from('parties')
-      .update({ opening_balance: opening })
-      .eq('id', p.id)
+
+    const payload: Record<string, unknown> = {
+      name: trimmed,
+      phone: edit.phone.trim() || null,
+      opening_balance: opening,
+    }
+
+    let { error: upErr } = await supabase.from('parties').update(payload).eq('id', p.id)
+
+    if (upErr?.message?.includes('opening_balance')) {
+      const fb = await supabase
+        .from('parties')
+        .update({ name: trimmed, phone: edit.phone.trim() || null })
+        .eq('id', p.id)
+      upErr = fb.error
+    }
+
     setLoading(false)
     if (upErr) {
       setError(
-        upErr.message.includes('opening_balance')
-          ? 'Başlangıç bakiyesi kolonu yok. SQL migration’ı çalıştırın.'
+        upErr.message.includes('unique') || upErr.code === '23505'
+          ? 'Bu isimde cari zaten var.'
           : upErr.message
       )
       return
     }
+
     setParties((prev) =>
-      prev.map((x) => (x.id === p.id ? { ...x, opening_balance: opening } : x))
+      prev.map((x) =>
+        x.id === p.id
+          ? { ...x, name: trimmed, phone: edit.phone.trim() || null, opening_balance: opening }
+          : x
+      )
     )
     setEditingId(null)
-    setMessage(`“${p.name}” başlangıç bakiyesi güncellendi.`)
+    setMessage(`“${trimmed}” güncellendi.`)
     router.refresh()
   }
 
@@ -238,9 +259,7 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
             Ekle
           </button>
         </div>
-        <p className="text-[11px] text-gray-400">
-          Örn. tedarikçiye 300.000 ₺ borç → tutar 300000, yön Borç
-        </p>
+        <p className="text-[11px] text-gray-400">{helpText}</p>
       </form>
 
       {(error || message) && (
@@ -268,6 +287,16 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
                     <p className="text-[11px] text-gray-400">
                       {p.phone || (p.kind === 'her_ikisi' ? 'Tedarikçi & Müşteri' : '—')}
                     </p>
+                    {!editing && (
+                      <p className="text-xs text-gray-600 mt-1">
+                        Başlangıç:{' '}
+                        <span className="font-medium tabular-nums">
+                          {formatted.amount === 0
+                            ? 'yok'
+                            : `₺${fmt(formatted.amount)} ${formatted.label}`}
+                        </span>
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {!editing && (
@@ -277,7 +306,7 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
                         disabled={loading}
                         className="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-50"
                       >
-                        Bakiye
+                        Düzenle
                       </button>
                     )}
                     <button
@@ -290,51 +319,65 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
                     </button>
                   </div>
                 </div>
-                {editing ? (
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={editAmount}
-                      onChange={(e) => setEditAmount(e.target.value)}
-                      className={`${inputCls} max-w-[9rem]`}
-                      disabled={loading}
-                    />
-                    <select
-                      value={editSide}
-                      onChange={(e) => setEditSide(e.target.value as 'borc' | 'alacak')}
-                      className={`${inputCls} max-w-[7rem]`}
-                      disabled={loading}
-                    >
-                      <option value="borc">Borç</option>
-                      <option value="alacak">Alacak</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => saveOpening(p)}
-                      disabled={loading}
-                      className="text-xs font-medium px-2.5 py-1.5 bg-gray-900 text-white rounded-md disabled:opacity-50"
-                    >
-                      Kaydet
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(null)}
-                      className="text-xs text-gray-500"
-                    >
-                      Vazgeç
-                    </button>
+                {editing && (
+                  <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={edit.name}
+                        onChange={(e) => setEdit((d) => ({ ...d, name: e.target.value }))}
+                        className={inputCls}
+                        disabled={loading}
+                        placeholder="İsim"
+                      />
+                      <input
+                        type="text"
+                        value={edit.phone}
+                        onChange={(e) => setEdit((d) => ({ ...d, phone: e.target.value }))}
+                        className={inputCls}
+                        disabled={loading}
+                        placeholder="Telefon"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={edit.openingAmount}
+                        onChange={(e) => setEdit((d) => ({ ...d, openingAmount: e.target.value }))}
+                        className={inputCls}
+                        disabled={loading}
+                        placeholder="Başlangıç bakiyesi"
+                      />
+                      <select
+                        value={edit.openingSide}
+                        onChange={(e) => setEdit((d) => ({ ...d, openingSide: e.target.value as 'borc' | 'alacak' }))}
+                        className={inputCls}
+                        disabled={loading}
+                      >
+                        <option value="borc">Borç</option>
+                        <option value="alacak">Alacak</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => saveEdit(p)}
+                        disabled={loading}
+                        className="text-xs font-medium px-3 py-1.5 bg-gray-900 text-white rounded-md disabled:opacity-50"
+                      >
+                        Kaydet
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="text-xs text-gray-500 px-2"
+                      >
+                        Vazgeç
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-xs text-gray-600">
-                    Başlangıç:{' '}
-                    <span className="font-medium tabular-nums">
-                      {formatted.amount === 0
-                        ? 'yok'
-                        : `₺${fmt(formatted.amount)} ${formatted.label}`}
-                    </span>
-                  </p>
                 )}
               </li>
             )
