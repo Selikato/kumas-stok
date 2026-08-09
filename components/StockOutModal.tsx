@@ -3,11 +3,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { fmt, parsePositiveNumber, parseNonNegativeNumber, todayISODate, unitLabel } from '@/lib/helpers'
+import { fmt, parsePositiveNumber, parseNonNegativeNumber, todayISODate, unitLabel, formatTRDate } from '@/lib/helpers'
 import { inputCls } from '@/lib/stockHelpers'
 import type { Fabric, Roll } from '@/app/page'
 import { totalQty } from '@/lib/fabricStats'
 import type { Party } from '@/lib/cari'
+import QuickPartyAdd from '@/components/QuickPartyAdd'
 
 type Props = {
   open: boolean
@@ -36,7 +37,10 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
   const submittingRef = useRef(false)
 
   const fabric = stockedFabrics.find((f) => f.id === fabricId) ?? null
-  const customers = parties.filter((p) => p.kind === 'musteri' || p.kind === 'her_ikisi')
+  const customers = parties
+    .filter((p) => p.kind === 'musteri' || p.kind === 'her_ikisi')
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr'))
 
   const allRolls: FlatRoll[] = useMemo(
     () =>
@@ -44,6 +48,15 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
         ? fabric.variants
             .flatMap((v) => v.rolls.map((r) => ({ ...r, variantName: v.color_name })))
             .filter((r) => (r.quantity ?? 0) > 0)
+            .sort((a, b) => {
+              // FIFO: eski giriş tarihi önce
+              const da = a.received_at || ''
+              const db = b.received_at || ''
+              if (da && db && da !== db) return da.localeCompare(db)
+              if (da && !db) return -1
+              if (!da && db) return 1
+              return (a.roll_number || '').localeCompare(b.roll_number || '', 'tr')
+            })
         : [],
     [fabric]
   )
@@ -177,7 +190,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Kumaş Çıkışı</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Top maliyeti (FIFO/özel) · satış fiyatı ile alacak</p>
+            <p className="text-xs text-gray-400 mt-0.5">Stoklar giriş tarihine göre (eski önce)</p>
           </div>
           <button onClick={onClose} disabled={loading} className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +221,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-2">
                   Stok kayıtları <span className="text-red-500">*</span>
-                  <span className="text-gray-400 font-normal ml-1">maliyet = top alış fiyatı</span>
+                  <span className="text-gray-400 font-normal ml-1">tarihe göre · maliyet = alış</span>
                 </label>
                 <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-2">
                   {allRolls.map((r) => {
@@ -223,6 +236,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
                               {r.lot_number ? `${r.lot_number}` : 'Kayıt'}
                               {` · ${r.quantity}${unit ? ` ${unit}` : ''}`}
                               {r.unit_price != null ? ` · maliyet ₺${fmt(r.unit_price)}` : ''}
+                              {r.received_at ? ` · ${formatTRDate(r.received_at)}` : ''}
                             </span>
                           </span>
                         </label>
@@ -248,9 +262,17 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
                   <option value="">Seçiniz</option>
                   {customers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                {customers.length === 0 && (
-                  <p className="text-[11px] text-amber-700 mt-1">Ayarlar → Cariler’den müşteri ekleyin.</p>
-                )}
+                <div className="mt-1">
+                  <QuickPartyAdd
+                    kind="musteri"
+                    disabled={loading}
+                    onCreated={(party) => {
+                      setParties((prev) => [...prev, party].sort((a, b) => a.name.localeCompare(b.name, 'tr')))
+                      setPartyId(party.id)
+                      setDestination(party.name)
+                    }}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

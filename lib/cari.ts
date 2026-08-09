@@ -10,6 +10,17 @@ export type Party = {
 
 export type AccountEntryType = 'borc' | 'alacak' | 'odeme' | 'tahsilat'
 
+export type PaymentMethod = 'nakit' | 'eft' | 'havale' | 'cek' | 'kart' | 'diger'
+
+export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'nakit', label: 'Nakit' },
+  { value: 'eft', label: 'EFT' },
+  { value: 'havale', label: 'Havale' },
+  { value: 'cek', label: 'Çek' },
+  { value: 'kart', label: 'Kart' },
+  { value: 'diger', label: 'Diğer' },
+]
+
 export type AccountEntry = {
   id: string
   occurred_at: string
@@ -19,6 +30,7 @@ export type AccountEntry = {
   voucher_number: string | null
   notes: string | null
   movement_id: string | null
+  payment_method: PaymentMethod | string | null
 }
 
 /** Pozitif = onlar bize borçlu (alacak), negatif = biz onlara borçluyuz (borç) */
@@ -40,6 +52,14 @@ export function formatBalance(bal: number): { label: string; amount: number } {
   return { label: 'Borç', amount: Math.abs(bal) }
 }
 
+/** Müşteride borç / tedarikçide alacak = ters bakiye */
+export function isReverseBalance(kind: PartyKind, bal: number): boolean {
+  if (Math.abs(bal) < 0.005) return false
+  if (kind === 'musteri') return bal < 0
+  if (kind === 'tedarikci') return bal > 0
+  return false
+}
+
 export function partyKindLabel(kind: PartyKind): string {
   if (kind === 'tedarikci') return 'Tedarikçi'
   if (kind === 'musteri') return 'Müşteri'
@@ -53,4 +73,9 @@ export function entryTypeLabel(t: AccountEntryType): string {
     case 'odeme': return 'Ödeme'
     case 'tahsilat': return 'Tahsilat'
   }
+}
+
+export function paymentMethodLabel(m: string | null | undefined): string {
+  if (!m) return ''
+  return PAYMENT_METHODS.find((x) => x.value === m)?.label || m
 }

@@ -90,7 +90,7 @@ export default function FabricTypesSettings({ initialTypes }: Props) {
       <div className="px-5 py-4 border-b border-gray-100">
         <h2 className="text-base font-semibold text-gray-900">Kumaş Tipleri</h2>
         <p className="text-xs text-gray-400 mt-0.5">
-          Stok listesi değil — Stok girişi → “+ Yeni kumaş” içinde tip olarak seçilir
+          Stok listesi değil — Stok girişi → “+ Yeni kumaş oluştur” → Kumaş Tipi
         </p>
       </div>
 

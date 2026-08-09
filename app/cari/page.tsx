@@ -7,6 +7,21 @@ import type { AccountEntry } from '@/lib/cari'
 export const revalidate = 0
 
 async function fetchEntries(): Promise<AccountEntry[]> {
+  const full = await supabase
+    .from('account_entries')
+    .select('id, occurred_at, party_id, entry_type, amount, voucher_number, notes, movement_id, payment_method')
+    .order('occurred_at', { ascending: false })
+    .limit(1000)
+
+  if (!full.error) {
+    return ((full.data ?? []) as AccountEntry[]).map((e) => ({
+      ...e,
+      amount: Number(e.amount),
+      payment_method: e.payment_method ?? null,
+    }))
+  }
+
+  // payment_method kolonu yoksa eski select
   const { data, error } = await supabase
     .from('account_entries')
     .select('id, occurred_at, party_id, entry_type, amount, voucher_number, notes, movement_id')
@@ -20,6 +35,7 @@ async function fetchEntries(): Promise<AccountEntry[]> {
   return ((data ?? []) as AccountEntry[]).map((e) => ({
     ...e,
     amount: Number(e.amount),
+    payment_method: null,
   }))
 }
 

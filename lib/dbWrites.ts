@@ -127,28 +127,55 @@ export async function insertAccountEntry(
     notes?: string
     movement_id?: string | null
     voucher_number?: string
+    payment_method?: string | null
   },
   client?: SupabaseClient
 ): Promise<{ id: string; voucher_number: string }> {
   const sb = clientOrDefault(client)
   const voucher = row.voucher_number || (await nextVoucherNumber('CAR', sb))
 
+  const payload: Record<string, unknown> = {
+    party_id: row.party_id,
+    entry_type: row.entry_type,
+    amount: row.amount,
+    occurred_at: row.occurred_at,
+    notes: row.notes ?? null,
+    movement_id: row.movement_id ?? null,
+    voucher_number: voucher,
+  }
+  if (row.payment_method) payload.payment_method = row.payment_method
+
   const { data, error } = await sb
     .from('account_entries')
-    .insert({
-      party_id: row.party_id,
-      entry_type: row.entry_type,
-      amount: row.amount,
-      occurred_at: row.occurred_at,
-      notes: row.notes ?? null,
-      movement_id: row.movement_id ?? null,
-      voucher_number: voucher,
-    })
+    .insert(payload)
     .select('id, voucher_number')
     .single()
 
-  if (error) throw new Error(error.message)
-  return { id: data.id, voucher_number: data.voucher_number || voucher }
+  if (!error && data) {
+    return { id: data.id, voucher_number: data.voucher_number || voucher }
+  }
+
+  // Kolon henüz yoksa notes içine yazarak devam et
+  if (error?.message?.includes('payment_method') && row.payment_method) {
+    const noteParts = [row.notes?.trim(), `Ödeme şekli: ${row.payment_method}`].filter(Boolean)
+    const fallback = await sb
+      .from('account_entries')
+      .insert({
+        party_id: row.party_id,
+        entry_type: row.entry_type,
+        amount: row.amount,
+        occurred_at: row.occurred_at,
+        notes: noteParts.join(' · ') || null,
+        movement_id: row.movement_id ?? null,
+        voucher_number: voucher,
+      })
+      .select('id, voucher_number')
+      .single()
+    if (fallback.error) throw new Error(fallback.error.message)
+    return { id: fallback.data.id, voucher_number: fallback.data.voucher_number || voucher }
+  }
+
+  throw new Error(error?.message || 'Cari kayıt yazılamadı')
 }
 
 /**

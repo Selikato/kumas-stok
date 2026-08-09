@@ -65,15 +65,43 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
 
   return (
     <div className="space-y-4">
+      <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1.5 w-full sm:w-auto sm:inline-flex">
+        {(
+          [
+            { value: '', label: 'Tümü' },
+            { value: 'GIRIS', label: 'Giriş' },
+            { value: 'CIKIS', label: 'Çıkış' },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.value || 'all'}
+            type="button"
+            disabled={pending}
+            onClick={() => apply({ type: tab.value, from, to })}
+            className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              type === tab.value
+                ? tab.value === 'GIRIS'
+                  ? 'bg-emerald-600 text-white'
+                  : tab.value === 'CIKIS'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-900 text-white'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <form
-        className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white border border-gray-200 rounded-xl p-4"
+        className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white border border-gray-200 rounded-xl p-4"
         onSubmit={(e) => {
           e.preventDefault()
           const fd = new FormData(e.currentTarget)
           apply({
             from: String(fd.get('from') || ''),
             to: String(fd.get('to') || ''),
-            type: String(fd.get('type') || ''),
+            type,
           })
         }}
       >
@@ -85,21 +113,13 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
           <label className="block text-xs text-gray-500 mb-1">Bitiş</label>
           <input name="to" type="date" defaultValue={to} className={inputCls} />
         </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Tür</label>
-          <select name="type" defaultValue={type} className={inputCls}>
-            <option value="">Tümü</option>
-            <option value="GIRIS">Giriş</option>
-            <option value="CIKIS">Çıkış</option>
-          </select>
-        </div>
         <div className="flex items-end gap-2">
           <button
             type="submit"
             disabled={pending}
             className="flex-1 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-700 rounded-lg disabled:opacity-50"
           >
-            {pending ? '…' : 'Filtrele'}
+            {pending ? '…' : 'Tarih filtrele'}
           </button>
           <Link
             href="/hareketler"

@@ -13,6 +13,7 @@ import {
 import { inputCls } from '@/lib/stockHelpers'
 import type { Fabric } from '@/app/page'
 import type { Party } from '@/lib/cari'
+import QuickPartyAdd from '@/components/QuickPartyAdd'
 
 type FabricTypeOption = { id: string; name: string }
 
@@ -24,8 +25,6 @@ type FormData = {
   quantity: string
   unit_price: string
   partyId: string
-  source: string
-  warehouse: string
   occurred_at: string
 }
 
@@ -37,8 +36,6 @@ const EMPTY: FormData = {
   quantity: '',
   unit_price: '',
   partyId: '',
-  source: '',
-  warehouse: '',
   occurred_at: todayISODate(),
 }
 
@@ -62,7 +59,10 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
   const selectedFabric = fabrics.find((f) => f.id === form.fabricId)
   const pickingExisting = form.fabricId !== '' && form.fabricId !== '__new__'
   const isNew = form.fabricId === '__new__' || (form.fabricId === '' && fabrics.length === 0)
-  const suppliers = parties.filter((p) => p.kind === 'tedarikci' || p.kind === 'her_ikisi')
+  const suppliers = parties
+    .filter((p) => p.kind === 'tedarikci' || p.kind === 'her_ikisi')
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr'))
 
   useEffect(() => {
     if (!open) return
@@ -128,15 +128,6 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     }))
   }
 
-  function onPartyPick(value: string) {
-    const party = suppliers.find((p) => p.id === value)
-    setForm((prev) => ({
-      ...prev,
-      partyId: value,
-      source: party?.name ?? '',
-    }))
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
@@ -149,14 +140,11 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     if (price == null) { setError('Geçerli bir fiyat giriniz.'); return }
     const party = suppliers.find((p) => p.id === form.partyId)
     if (!party) { setError('Tedarikçi seçiniz.'); return }
-    const source = party.name
 
     if (!pickingExisting) {
       if (!form.fabric_type) { setError('Kumaş tipi zorunludur.'); return }
       if (!form.unit) { setError('Birim zorunludur.'); return }
     }
-
-    const warehouse = form.warehouse.trim() || 'Depo'
 
     setLoading(true)
     setError(null)
@@ -173,8 +161,8 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
           quantity: qty,
           unitPrice: price,
           partyId: party.id,
-          source,
-          warehouse,
+          source: party.name,
+          warehouse: 'Depo',
           occurredAt: form.occurred_at,
         }),
       })
@@ -205,7 +193,7 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Kumaş Girişi</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Fiş kesilir · tedarikçiye borç işlenir</p>
+            <p className="text-xs text-gray-400 mt-0.5">Tedarikçi · tarih · miktar · fiyat</p>
           </div>
           <button onClick={onClose} disabled={loading} className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -224,7 +212,7 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
               <option value="__new__">+ Yeni kumaş oluştur</option>
             </select>
             <p className="text-[11px] text-gray-400 mt-1">
-              Ayarlardaki tipler burada listelenmez. Yeni kart için “+ Yeni kumaş oluştur” seçin.
+              Ayarlardaki <span className="font-medium">kumaş tipi</span> burada değil; “+ Yeni kumaş” içinde tip seçilir.
             </p>
           </Field>
 
@@ -271,13 +259,20 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
           )}
 
           <Field label="Tedarikçi" required>
-            <select value={form.partyId} onChange={(e) => onPartyPick(e.target.value)} className={inputCls} disabled={loading}>
+            <select value={form.partyId} onChange={(e) => set('partyId', e.target.value)} className={inputCls} disabled={loading}>
               <option value="">Seçiniz</option>
               {suppliers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
-            {suppliers.length === 0 && (
-              <p className="text-[11px] text-amber-700 mt-1">Ayarlar → Cariler’den tedarikçi ekleyin.</p>
-            )}
+            <div className="mt-1">
+              <QuickPartyAdd
+                kind="tedarikci"
+                disabled={loading}
+                onCreated={(party) => {
+                  setParties((prev) => [...prev, party].sort((a, b) => a.name.localeCompare(b.name, 'tr')))
+                  set('partyId', party.id)
+                }}
+              />
+            </div>
           </Field>
 
           <Field label="Tarih" required>
@@ -292,10 +287,6 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
               <input type="number" min="0" step="any" value={form.unit_price} onChange={(e) => set('unit_price', e.target.value)} placeholder="0.00" className={inputCls} disabled={loading} />
             </Field>
           </div>
-
-          <Field label="Depo Konumu">
-            <input type="text" value={form.warehouse} onChange={(e) => set('warehouse', e.target.value)} placeholder="ör. A-Raf-3" className={inputCls} disabled={loading} />
-          </Field>
 
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
 
