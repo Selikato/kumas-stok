@@ -5,6 +5,7 @@ type Props = {
   title?: string
   girisTutar: number
   cikisMaliyet: number
+  cikisSatis?: number
   girisQty: number
   cikisQty: number
   movementCount: number
@@ -15,12 +16,13 @@ export default function PeriodSummary({
   title = 'Bu ay',
   girisTutar,
   cikisMaliyet,
+  cikisSatis = 0,
   girisQty,
   cikisQty,
   movementCount,
   stockValue,
 }: Props) {
-  const net = girisTutar - cikisMaliyet
+  const brutKar = cikisSatis - cikisMaliyet
 
   return (
     <section className="space-y-3">
@@ -30,10 +32,11 @@ export default function PeriodSummary({
           <p className="text-xs text-gray-400 mt-0.5">{movementCount} hareket · stok değeri anlık</p>
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <Card label="Giriş tutarı" value={formatMoney(girisTutar)} />
         <Card label="Çıkış maliyeti" value={formatMoney(cikisMaliyet)} />
-        <Card label="Net (giriş−maliyet)" value={formatMoney(net)} highlight={net >= 0} danger={net < 0} />
+        <Card label="Çıkış satış" value={formatMoney(cikisSatis)} />
+        <Card label="Brüt kâr (satış−maliyet)" value={formatMoney(brutKar)} highlight={brutKar >= 0} danger={brutKar < 0} />
         <Card label="Miktar G / Ç" value={`${fmtQty(girisQty)} / ${fmtQty(cikisQty)}`} />
         <Card label="Stok değeri" value={formatMoney(stockValue)} dark />
       </div>

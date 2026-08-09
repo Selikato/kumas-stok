@@ -50,6 +50,7 @@ export default async function HareketlerPage({
           title="Filtrelenen dönem"
           girisTutar={summary.girisTutar}
           cikisMaliyet={summary.cikisMaliyet}
+          cikisSatis={summary.cikisSatis}
           girisQty={summary.girisQty}
           cikisQty={summary.cikisQty}
           movementCount={summary.count}

@@ -31,13 +31,21 @@ export function isGiris(t: string): boolean {
 }
 
 export function movementMoney(m: MovementRow): number | null {
+  // Giriş: alış tutarı; çıkış: satış tutarı (line_total)
   if (m.line_total != null) return Number(m.line_total)
   if (isGiris(m.movement_type) && m.unit_price != null) {
     return Number(m.amount) * Number(m.unit_price)
   }
-  if (!isGiris(m.movement_type) && m.unit_cost != null) {
-    return Number(m.amount) * Number(m.unit_cost)
+  if (!isGiris(m.movement_type) && m.unit_price != null) {
+    return Number(m.amount) * Number(m.unit_price)
   }
+  return null
+}
+
+/** Çıkış satırının stok maliyeti (alış birim fiyatı × miktar) */
+export function movementCost(m: MovementRow): number | null {
+  if (isGiris(m.movement_type)) return null
+  if (m.unit_cost != null) return Number(m.amount) * Number(m.unit_cost)
   return null
 }
 
@@ -61,15 +69,19 @@ export function summarizeMovements(rows: MovementRow[]) {
   let cikisQty = 0
   let girisTutar = 0
   let cikisMaliyet = 0
+  let cikisSatis = 0
   for (const m of rows) {
-    const money = movementMoney(m)
     if (isGiris(m.movement_type)) {
       girisQty += Number(m.amount)
+      const money = movementMoney(m)
       if (money != null) girisTutar += money
     } else {
       cikisQty += Number(m.amount)
-      if (money != null) cikisMaliyet += money
+      const cost = movementCost(m)
+      if (cost != null) cikisMaliyet += cost
+      const sale = movementMoney(m)
+      if (sale != null) cikisSatis += sale
     }
   }
-  return { girisQty, cikisQty, girisTutar, cikisMaliyet, count: rows.length }
+  return { girisQty, cikisQty, girisTutar, cikisMaliyet, cikisSatis, count: rows.length }
 }

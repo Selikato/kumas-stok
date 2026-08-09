@@ -94,6 +94,7 @@ export default async function Home() {
           title="Bu ay özeti"
           girisTutar={summary.girisTutar}
           cikisMaliyet={summary.cikisMaliyet}
+          cikisSatis={summary.cikisSatis}
           girisQty={summary.girisQty}
           cikisQty={summary.cikisQty}
           movementCount={summary.count}
