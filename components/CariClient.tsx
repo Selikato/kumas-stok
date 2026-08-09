@@ -242,7 +242,7 @@ export default function CariClient({ parties: initialParties, entries: initialEn
       <div className="lg:col-span-3 space-y-4">
         {selected ? (
           <>
-            <div className="bg-surface rounded-xl border border-line shadow-[0_1px_2px_rgba(15,28,46,0.04)] sticky top-[4.5rem] z-[5]">
+            <div className="bg-surface rounded-xl border border-line shadow-[0_1px_2px_rgba(15,28,46,0.04)]">
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div>
