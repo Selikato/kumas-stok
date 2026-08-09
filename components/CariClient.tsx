@@ -17,8 +17,10 @@ import {
   type PaymentMethod,
 } from '@/lib/cari'
 import { insertAccountEntry } from '@/lib/dbWrites'
-import { fmt, formatTRDate, todayISODate } from '@/lib/helpers'
+import { fmt, formatTRDate, todayISODate, parsePositiveNumber } from '@/lib/helpers'
 import { inputCls } from '@/lib/stockHelpers'
+import { fxNote, toTry, currencySymbol, type MoneyCurrency } from '@/lib/money'
+import CurrencyFields from '@/components/CurrencyFields'
 
 type Props = {
   parties: Party[]
@@ -35,6 +37,8 @@ export default function CariClient({ parties: initialParties, entries: initialEn
   const [selectedId, setSelectedId] = useState(initialParties[0]?.id ?? '')
   const [entryType, setEntryType] = useState<AccountEntryType>('odeme')
   const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState<MoneyCurrency>('TRY')
+  const [fxRate, setFxRate] = useState('')
   const [occurredAt, setOccurredAt] = useState(todayISODate())
   const [notes, setNotes] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('nakit')
@@ -90,8 +94,8 @@ export default function CariClient({ parties: initialParties, entries: initialEn
   async function handlePayment(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedId) { setError('Cari seçiniz.'); return }
-    const amt = parseFloat(amount)
-    if (!amount.trim() || isNaN(amt) || amt <= 0) { setError('Geçerli tutar giriniz.'); return }
+    const original = parseFloat(amount)
+    if (!amount.trim() || isNaN(original) || original <= 0) { setError('Geçerli tutar giriniz.'); return }
     if (!occurredAt) { setError('Tarih zorunlu.'); return }
     if (showPaymentMethod && !paymentMethod) { setError('Ödeme şekli seçiniz.'); return }
     const isManual = entryType === 'borc' || entryType === 'alacak'
@@ -99,6 +103,23 @@ export default function CariClient({ parties: initialParties, entries: initialEn
       setError('Açıklama zorunlu (ör. Boyahane ücreti).')
       return
     }
+    if (currency === 'USD' && parsePositiveNumber(fxRate) == null) {
+      setError('USD için geçerli kur giriniz.')
+      return
+    }
+
+    let tryAmount: number
+    let fx: number
+    try {
+      const converted = toTry(original, currency, currency === 'USD' ? parsePositiveNumber(fxRate) : 1)
+      tryAmount = converted.tryAmount
+      fx = converted.fxRate
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Kur hatası.')
+      return
+    }
+
+    const noteParts = [notes.trim(), fxNote(currency, fx, original)].filter(Boolean)
 
     setLoading(true)
     setError(null)
@@ -107,14 +128,19 @@ export default function CariClient({ parties: initialParties, entries: initialEn
       const res = await insertAccountEntry({
         party_id: selectedId,
         entry_type: entryType,
-        amount: amt,
+        amount: tryAmount,
         occurred_at: occurredAt,
-        notes: notes.trim() || undefined,
+        notes: noteParts.join(' · ') || undefined,
         payment_method: showPaymentMethod ? paymentMethod || null : null,
+        currency,
+        fx_rate: fx,
+        original_amount: original,
       })
-      setMessage(`${res.voucher_number} kaydedildi.`)
+      setMessage(`${res.voucher_number} kaydedildi · ₺${fmt(tryAmount)}`)
       setAmount('')
       setNotes('')
+      setCurrency('TRY')
+      setFxRate('')
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Hata')
@@ -261,12 +287,21 @@ export default function CariClient({ parties: initialParties, entries: initialEn
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Tutar (₺)</label>
+                  <label className="block text-xs text-gray-500 mb-1">Tutar ({currencySymbol(currency)})</label>
                   <input type="number" min="0.01" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputCls} disabled={loading} />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Tarih</label>
                   <input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} className={inputCls} disabled={loading} />
+                </div>
+                <div className="sm:col-span-2">
+                  <CurrencyFields
+                    currency={currency}
+                    fxRate={fxRate}
+                    onCurrencyChange={setCurrency}
+                    onFxRateChange={setFxRate}
+                    disabled={loading}
+                  />
                 </div>
                 {showPaymentMethod ? (
                   <div>

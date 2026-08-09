@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabaseAdmin'
 import { requireSession } from '@/lib/apiAuth'
 import { generateFabricCode, generateRollNumber } from '@/lib/helpers'
 import { insertRoll, insertMovement, insertAccountEntry } from '@/lib/dbWrites'
+import { fxNote, toTry, type MoneyCurrency } from '@/lib/money'
 
 export async function POST(request: Request) {
   const denied = await requireSession()
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
     source?: string
     warehouse?: string
     occurredAt?: string
+    currency?: MoneyCurrency
+    fxRate?: number | null
   }
   try {
     body = await request.json()
@@ -27,18 +30,30 @@ export async function POST(request: Request) {
 
   const name = body.name?.trim()
   const qty = Number(body.quantity)
-  const price = Number(body.unitPrice)
+  const originalPrice = Number(body.unitPrice)
   const occurredAt = body.occurredAt
   const warehouse = body.warehouse?.trim() || 'Depo'
   const partyId = body.partyId || null
+  const currency: MoneyCurrency = body.currency === 'USD' ? 'USD' : 'TRY'
 
   if (!name) return NextResponse.json({ error: 'Kumaş adı zorunlu.' }, { status: 400 })
   if (!(qty > 0)) return NextResponse.json({ error: 'Geçerli miktar giriniz.' }, { status: 400 })
-  if (!(price >= 0) || Number.isNaN(price)) {
+  if (!(originalPrice >= 0) || Number.isNaN(originalPrice)) {
     return NextResponse.json({ error: 'Geçerli fiyat giriniz.' }, { status: 400 })
   }
   if (!occurredAt) return NextResponse.json({ error: 'Tarih zorunlu.' }, { status: 400 })
   if (!partyId) return NextResponse.json({ error: 'Tedarikçi seçiniz.' }, { status: 400 })
+
+  let price: number
+  let fxRate: number
+  try {
+    const converted = toTry(originalPrice, currency, body.fxRate)
+    price = converted.tryAmount
+    fxRate = converted.fxRate
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Kur hatası.'
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
 
   const sb = createServiceClient()
 
@@ -55,6 +70,7 @@ export async function POST(request: Request) {
   }
   const resolvedSource = party.name
   const lineTotal = qty * price
+  const fxSuffix = fxNote(currency, fxRate, originalPrice)
 
   try {
     let fabricId: string
@@ -138,11 +154,16 @@ export async function POST(request: Request) {
           movement_type: 'GIRIS',
           amount: qty,
           occurred_at: occurredAt,
-          notes: `Giriş | Nereden: ${resolvedSource} | Depo: ${warehouse}`,
+          notes: [`Giriş | Nereden: ${resolvedSource} | Depo: ${warehouse}`, fxSuffix]
+            .filter(Boolean)
+            .join(' · '),
           party_id: partyId,
           unit_price: price,
           unit_cost: null,
           line_total: lineTotal,
+          currency,
+          fx_rate: fxRate,
+          original_unit_price: originalPrice,
         },
         sb
       )
@@ -161,9 +182,12 @@ export async function POST(request: Request) {
             entry_type: 'borc',
             amount: lineTotal,
             occurred_at: occurredAt,
-            notes: `${name} alış · ${voucher}`,
+            notes: [`${name} alış · ${voucher}`, fxSuffix].filter(Boolean).join(' · '),
             movement_id: movementId,
             voucher_number: voucher,
+            currency,
+            fx_rate: fxRate,
+            original_amount: qty * originalPrice,
           },
           sb
         )

@@ -13,7 +13,10 @@ import {
 import { inputCls } from '@/lib/stockHelpers'
 import type { Fabric } from '@/app/page'
 import type { Party } from '@/lib/cari'
+import type { MoneyCurrency } from '@/lib/money'
+import { currencySymbol } from '@/lib/money'
 import QuickPartyAdd from '@/components/QuickPartyAdd'
+import CurrencyFields from '@/components/CurrencyFields'
 
 type FormData = {
   fabricId: string
@@ -23,6 +26,8 @@ type FormData = {
   unit_price: string
   partyId: string
   occurred_at: string
+  currency: MoneyCurrency
+  fxRate: string
 }
 
 const EMPTY: FormData = {
@@ -33,6 +38,8 @@ const EMPTY: FormData = {
   unit_price: '',
   partyId: '',
   occurred_at: todayISODate(),
+  currency: 'TRY',
+  fxRate: '',
 }
 
 type Props = {
@@ -137,6 +144,10 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     if (qty == null) { setError('Geçerli bir miktar giriniz.'); return }
     const price = parseNonNegativeNumber(form.unit_price)
     if (price == null) { setError('Geçerli bir fiyat giriniz.'); return }
+    if (form.currency === 'USD') {
+      const fx = parsePositiveNumber(form.fxRate)
+      if (fx == null) { setError('USD için geçerli kur giriniz.'); return }
+    }
     const party = suppliers.find((p) => p.id === form.partyId)
     if (!party) { setError('Tedarikçi seçiniz.'); return }
 
@@ -162,6 +173,8 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
           source: party.name,
           warehouse: 'Depo',
           occurredAt: form.occurred_at,
+          currency: form.currency,
+          fxRate: form.currency === 'USD' ? parsePositiveNumber(form.fxRate) : 1,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -183,6 +196,8 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
   }
 
   if (!open) return null
+
+  const priceSym = currencySymbol(form.currency)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
@@ -253,11 +268,19 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
             <input type="date" value={form.occurred_at} onChange={(e) => set('occurred_at', e.target.value)} className={inputCls} disabled={loading} />
           </Field>
 
+          <CurrencyFields
+            currency={form.currency}
+            fxRate={form.fxRate}
+            onCurrencyChange={(c) => setForm((prev) => ({ ...prev, currency: c }))}
+            onFxRateChange={(v) => set('fxRate', v)}
+            disabled={loading}
+          />
+
           <div className="grid grid-cols-2 gap-3">
             <Field label={`Miktar${pickingExisting && selectedFabric?.unit ? ` (${unitLabel(selectedFabric.unit)})` : form.unit ? ` (${unitLabel(form.unit)})` : ''}`} required>
               <input type="number" min="0.01" step="any" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="0" className={inputCls} disabled={loading} />
             </Field>
-            <Field label="Alış fiyatı (₺)" required>
+            <Field label={`Alış fiyatı (${priceSym})`} required>
               <input type="number" min="0" step="any" value={form.unit_price} onChange={(e) => set('unit_price', e.target.value)} placeholder="0.00" className={inputCls} disabled={loading} />
             </Field>
           </div>

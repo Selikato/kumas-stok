@@ -8,7 +8,10 @@ import { inputCls } from '@/lib/stockHelpers'
 import type { Fabric, Roll } from '@/app/page'
 import { totalQty } from '@/lib/fabricStats'
 import type { Party } from '@/lib/cari'
+import type { MoneyCurrency } from '@/lib/money'
+import { currencySymbol } from '@/lib/money'
 import QuickPartyAdd from '@/components/QuickPartyAdd'
+import CurrencyFields from '@/components/CurrencyFields'
 
 type Props = {
   open: boolean
@@ -30,6 +33,8 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
   const [partyId, setPartyId] = useState('')
   const [destination, setDestination] = useState('')
   const [salePrice, setSalePrice] = useState('')
+  const [currency, setCurrency] = useState<MoneyCurrency>('TRY')
+  const [fxRate, setFxRate] = useState('')
   const [occurredAt, setOccurredAt] = useState(todayISODate())
   const [parties, setParties] = useState<Party[]>([])
   const [loading, setLoading] = useState(false)
@@ -72,6 +77,8 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
     setPartyId('')
     setDestination('')
     setSalePrice('')
+    setCurrency('TRY')
+    setFxRate('')
     setOccurredAt(todayISODate())
     setError(null)
     setLoading(false)
@@ -123,6 +130,10 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
 
     const sale = salePrice.trim() ? parseNonNegativeNumber(salePrice) : null
     if (sale == null) { setError('Geçerli satış fiyatı giriniz.'); return }
+    if (currency === 'USD') {
+      const fx = parsePositiveNumber(fxRate)
+      if (fx == null) { setError('USD için geçerli kur giriniz.'); return }
+    }
 
     const lines: { rollId: string; amount: number }[] = []
     for (const rollId of selectedIds) {
@@ -152,6 +163,8 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
           occurredAt,
           partyId: party.id,
           salePrice: sale,
+          currency,
+          fxRate: currency === 'USD' ? parsePositiveNumber(fxRate) : 1,
           lines,
         }),
       })
@@ -275,17 +288,24 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Tarih <span className="text-red-500">*</span></label>
-                  <input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} className={inputCls} disabled={loading} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Satış fiyatı (₺) <span className="text-red-500">*</span>
-                  </label>
-                  <input type="number" min="0" step="any" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} placeholder="0.00" className={inputCls} disabled={loading} />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Tarih <span className="text-red-500">*</span></label>
+                <input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} className={inputCls} disabled={loading} />
+              </div>
+
+              <CurrencyFields
+                currency={currency}
+                fxRate={fxRate}
+                onCurrencyChange={setCurrency}
+                onFxRateChange={setFxRate}
+                disabled={loading}
+              />
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Satış fiyatı ({currencySymbol(currency)}) <span className="text-red-500">*</span>
+                </label>
+                <input type="number" min="0" step="any" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} placeholder="0.00" className={inputCls} disabled={loading} />
               </div>
             </>
           )}

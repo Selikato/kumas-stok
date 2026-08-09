@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabaseAdmin'
 import { requireSession } from '@/lib/apiAuth'
 import { insertMovement, insertAccountEntry } from '@/lib/dbWrites'
+import { fxNote, toTry, type MoneyCurrency } from '@/lib/money'
 
 type Line = { rollId: string; amount: number }
 
@@ -15,6 +16,8 @@ export async function POST(request: Request) {
     occurredAt?: string
     partyId?: string | null
     salePrice?: number | null
+    currency?: MoneyCurrency
+    fxRate?: number | null
     lines?: Line[]
   }
   try {
@@ -26,18 +29,31 @@ export async function POST(request: Request) {
   const fabricName = body.fabricName?.trim() || 'Kumaş'
   const occurredAt = body.occurredAt
   const partyId = body.partyId || null
-  const sale =
+  const originalSale =
     body.salePrice != null && !Number.isNaN(Number(body.salePrice))
       ? Number(body.salePrice)
       : null
+  const currency: MoneyCurrency = body.currency === 'USD' ? 'USD' : 'TRY'
   const lines = body.lines || []
 
   if (!occurredAt) return NextResponse.json({ error: 'Tarih zorunlu.' }, { status: 400 })
   if (lines.length === 0) return NextResponse.json({ error: 'En az bir stok kaydı seçiniz.' }, { status: 400 })
   if (!partyId) return NextResponse.json({ error: 'Müşteri seçiniz.' }, { status: 400 })
-  if (sale == null || Number.isNaN(sale) || sale < 0) {
+  if (originalSale == null || Number.isNaN(originalSale) || originalSale < 0) {
     return NextResponse.json({ error: 'Satış fiyatı zorunlu.' }, { status: 400 })
   }
+
+  let sale: number
+  let fxRate: number
+  try {
+    const converted = toTry(originalSale, currency, body.fxRate)
+    sale = converted.tryAmount
+    fxRate = converted.fxRate
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Kur hatası.'
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
+  const fxSuffix = fxNote(currency, fxRate, originalSale)
 
   let sb
   try {
@@ -121,11 +137,16 @@ export async function POST(request: Request) {
           movement_type: 'CIKIS',
           amount: amt,
           occurred_at: occurredAt,
-          notes: `Çıkış | Nereye: ${resolvedDest} | Satış: ₺${sale}`,
+          notes: [`Çıkış | Nereye: ${resolvedDest} | Satış: ₺${sale}`, fxSuffix]
+            .filter(Boolean)
+            .join(' · '),
           party_id: partyId,
           unit_price: sale,
           unit_cost: unitCost,
           line_total: saleTotal ?? costTotal,
+          currency,
+          fx_rate: fxRate,
+          original_unit_price: originalSale,
         },
         sb
       )
@@ -142,9 +163,14 @@ export async function POST(request: Request) {
               entry_type: 'alacak',
               amount: saleTotal,
               occurred_at: occurredAt,
-              notes: `${fabricName} satış · ${mv.voucher_number}`,
+              notes: [`${fabricName} satış · ${mv.voucher_number}`, fxSuffix]
+                .filter(Boolean)
+                .join(' · '),
               movement_id: mv.id,
               voucher_number: mv.voucher_number,
+              currency,
+              fx_rate: fxRate,
+              original_amount: amt * originalSale,
             },
             sb
           )

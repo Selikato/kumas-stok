@@ -43,6 +43,9 @@ type MovementInsert = {
   unit_cost?: number | null
   line_total?: number | null
   voucher_number?: string
+  currency?: string | null
+  fx_rate?: number | null
+  original_unit_price?: number | null
 }
 
 export async function insertMovement(
@@ -54,7 +57,7 @@ export async function insertMovement(
     row.voucher_number ||
     (await nextVoucherNumber(row.movement_type === 'GIRIS' ? 'GIR' : 'CIK', sb))
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     roll_id: row.roll_id,
     movement_type: row.movement_type,
     amount: row.amount,
@@ -66,6 +69,9 @@ export async function insertMovement(
     line_total: row.line_total ?? null,
     voucher_number: voucher,
   }
+  if (row.currency) payload.currency = row.currency
+  if (row.fx_rate != null) payload.fx_rate = row.fx_rate
+  if (row.original_unit_price != null) payload.original_unit_price = row.original_unit_price
 
   const { data, error } = await sb
     .from('stock_movements')
@@ -75,6 +81,18 @@ export async function insertMovement(
 
   if (!error && data) {
     return { id: data.id, voucher_number: data.voucher_number || voucher }
+  }
+
+  if (
+    error?.message?.includes('currency') ||
+    error?.message?.includes('fx_rate') ||
+    error?.message?.includes('original_unit_price')
+  ) {
+    const { currency: _c, fx_rate: _f, original_unit_price: _o, ...rest } = payload
+    const retry = await sb.from('stock_movements').insert(rest).select('id, voucher_number').single()
+    if (!retry.error && retry.data) {
+      return { id: retry.data.id, voucher_number: retry.data.voucher_number || voucher }
+    }
   }
 
   if (
@@ -128,6 +146,9 @@ export async function insertAccountEntry(
     movement_id?: string | null
     voucher_number?: string
     payment_method?: string | null
+    currency?: string | null
+    fx_rate?: number | null
+    original_amount?: number | null
   },
   client?: SupabaseClient
 ): Promise<{ id: string; voucher_number: string }> {
@@ -144,6 +165,9 @@ export async function insertAccountEntry(
     voucher_number: voucher,
   }
   if (row.payment_method) payload.payment_method = row.payment_method
+  if (row.currency) payload.currency = row.currency
+  if (row.fx_rate != null) payload.fx_rate = row.fx_rate
+  if (row.original_amount != null) payload.original_amount = row.original_amount
 
   const { data, error } = await sb
     .from('account_entries')
@@ -156,8 +180,19 @@ export async function insertAccountEntry(
   }
 
   // Kolon henüz yoksa notes içine yazarak devam et
-  if (error?.message?.includes('payment_method') && row.payment_method) {
-    const noteParts = [row.notes?.trim(), `Ödeme şekli: ${row.payment_method}`].filter(Boolean)
+  if (
+    error?.message?.includes('payment_method') ||
+    error?.message?.includes('currency') ||
+    error?.message?.includes('fx_rate') ||
+    error?.message?.includes('original_amount')
+  ) {
+    const noteParts = [
+      row.notes?.trim(),
+      row.payment_method ? `Ödeme şekli: ${row.payment_method}` : null,
+      row.currency === 'USD' && row.fx_rate
+        ? `USD ${row.original_amount ?? ''} × kur ${row.fx_rate}`
+        : null,
+    ].filter(Boolean)
     const fallback = await sb
       .from('account_entries')
       .insert({
@@ -274,6 +309,101 @@ export async function deleteMovement(
   return { voucher_number: mv.voucher_number }
 }
 
+/**
+ * Hareket düzenle: tarih, not, birim fiyat (TL).
+ * Miktar değişmez. Bağlı cari tutar/tarih güncellenir.
+ * Girişte roll.unit_price ve received_at da güncellenir.
+ */
+export async function updateMovement(
+  movementId: string,
+  patch: {
+    occurred_at?: string
+    notes?: string | null
+    unit_price?: number | null
+  },
+  client?: SupabaseClient
+): Promise<{ voucher_number: string | null }> {
+  const sb = clientOrDefault(client)
+
+  const { data: mv, error: fetchErr } = await sb
+    .from('stock_movements')
+    .select(
+      'id, roll_id, movement_type, amount, occurred_at, notes, unit_price, unit_cost, line_total, voucher_number, party_id'
+    )
+    .eq('id', movementId)
+    .single()
+
+  if (fetchErr || !mv) throw new Error(fetchErr?.message || 'Hareket bulunamadı.')
+
+  const type = String(mv.movement_type).toUpperCase()
+  const isIn = type === 'GIRIS' || type === 'IN'
+  const amount = Number(mv.amount)
+  const nextDate = patch.occurred_at?.trim() || mv.occurred_at
+  const nextNotes = patch.notes !== undefined ? patch.notes : mv.notes
+  const nextUnitPrice =
+    patch.unit_price !== undefined && patch.unit_price != null
+      ? Number(patch.unit_price)
+      : mv.unit_price != null
+        ? Number(mv.unit_price)
+        : null
+
+  if (patch.unit_price !== undefined && patch.unit_price != null) {
+    if (Number.isNaN(nextUnitPrice!) || nextUnitPrice! < 0) {
+      throw new Error('Geçerli birim fiyat giriniz.')
+    }
+  }
+  if (!nextDate) throw new Error('Tarih zorunlu.')
+
+  const nextLineTotal =
+    nextUnitPrice != null ? amount * nextUnitPrice : mv.line_total != null ? Number(mv.line_total) : null
+
+  const updatePayload: Record<string, unknown> = {
+    occurred_at: nextDate,
+    notes: nextNotes,
+  }
+  if (patch.unit_price !== undefined) {
+    updatePayload.unit_price = nextUnitPrice
+    updatePayload.line_total = nextLineTotal
+  }
+
+  const { data: updated, error: upErr } = await sb
+    .from('stock_movements')
+    .update(updatePayload)
+    .eq('id', movementId)
+    .select('id')
+    .maybeSingle()
+
+  if (upErr) throw new Error(upErr.message)
+  if (!updated) throw new Error('Hareket güncellenemedi (yetki/RLS).')
+
+  if (isIn && (patch.unit_price !== undefined || patch.occurred_at)) {
+    const rollPatch: Record<string, unknown> = {}
+    if (patch.unit_price !== undefined) rollPatch.unit_price = nextUnitPrice
+    if (patch.occurred_at) rollPatch.received_at = nextDate
+    if (Object.keys(rollPatch).length > 0) {
+      const { error: rollErr } = await sb.from('rolls').update(rollPatch).eq('id', mv.roll_id)
+      if (rollErr) throw new Error(`Stok kaydı güncellenemedi: ${rollErr.message}`)
+    }
+  }
+
+  if (patch.unit_price !== undefined || patch.occurred_at) {
+    const cariPatch: Record<string, unknown> = {}
+    if (patch.occurred_at) cariPatch.occurred_at = nextDate
+    if (patch.unit_price !== undefined && nextLineTotal != null) {
+      cariPatch.amount = nextLineTotal
+    }
+    if (Object.keys(cariPatch).length > 0) {
+      const { error: cariErr } = await sb
+        .from('account_entries')
+        .update(cariPatch)
+        .eq('movement_id', movementId)
+      if (cariErr) throw new Error(`Cari kayıt güncellenemedi: ${cariErr.message}`)
+    }
+  }
+
+  return { voucher_number: mv.voucher_number }
+}
+
 /** Browser-safe delete via API (service role). */
 export async function deleteMovementViaApi(movementId: string): Promise<void> {
   const res = await fetch('/api/movements/delete', {
@@ -283,4 +413,18 @@ export async function deleteMovementViaApi(movementId: string): Promise<void> {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || 'Silinemedi.')
+}
+
+/** Browser-safe update via API (service role). */
+export async function updateMovementViaApi(
+  movementId: string,
+  patch: { occurred_at?: string; notes?: string | null; unit_price?: number | null }
+): Promise<void> {
+  const res = await fetch('/api/movements/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: movementId, ...patch }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || 'Güncellenemedi.')
 }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useState, useTransition } from 'react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
 import type { MovementRow } from '@/lib/movements'
 import {
   formatMoney,
@@ -10,9 +10,9 @@ import {
   movementMoney,
   movementTypeLabel,
 } from '@/lib/movements'
-import { formatQtyWithUnit, formatTRDate, unitLabel } from '@/lib/helpers'
+import { formatQtyWithUnit, formatTRDate, parseNonNegativeNumber, unitLabel } from '@/lib/helpers'
 import { inputCls } from '@/lib/stockHelpers'
-import { deleteMovementViaApi } from '@/lib/dbWrites'
+import { deleteMovementViaApi, updateMovementViaApi } from '@/lib/dbWrites'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
 type Props = {
@@ -27,7 +27,12 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
   const searchParams = useSearchParams()
   const [pending, startTransition] = useTransition()
   const [target, setTarget] = useState<MovementRow | null>(null)
+  const [editTarget, setEditTarget] = useState<MovementRow | null>(null)
+  const [editDate, setEditDate] = useState('')
+  const [editPrice, setEditPrice] = useState('')
+  const [editNotes, setEditNotes] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -45,6 +50,13 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
     [router, searchParams]
   )
 
+  useEffect(() => {
+    if (!editTarget) return
+    setEditDate(editTarget.occurred_at?.slice(0, 10) || '')
+    setEditPrice(editTarget.unit_price != null ? String(editTarget.unit_price) : '')
+    setEditNotes(editTarget.notes || '')
+  }, [editTarget])
+
   async function confirmDelete() {
     if (!target) return
     const label = target.voucher_number || target.id.slice(0, 8)
@@ -60,6 +72,39 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
       setError(err instanceof Error ? err.message : 'Silinemedi.')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editTarget) return
+    if (!editDate) {
+      setError('Tarih zorunlu.')
+      return
+    }
+    const price = editPrice.trim() === '' ? null : parseNonNegativeNumber(editPrice)
+    if (editPrice.trim() !== '' && price == null) {
+      setError('Geçerli birim fiyat giriniz.')
+      return
+    }
+
+    const label = editTarget.voucher_number || editTarget.id.slice(0, 8)
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await updateMovementViaApi(editTarget.id, {
+        occurred_at: editDate,
+        notes: editNotes.trim() || null,
+        unit_price: price,
+      })
+      setSuccess(`${label} güncellendi.`)
+      setEditTarget(null)
+      router.refresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Güncellenemedi.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -152,7 +197,7 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
                   <th className="px-4 py-3 font-medium">Cari</th>
                   <th className="px-4 py-3 font-medium text-right">Miktar</th>
                   <th className="px-4 py-3 font-medium text-right">Tutar</th>
-                  <th className="px-4 py-3 font-medium text-right w-20">İşlem</th>
+                  <th className="px-4 py-3 font-medium text-right w-28">İşlem</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -191,17 +236,30 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setError(null)
-                            setTarget(m)
-                          }}
-                          disabled={deleting}
-                          className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-40"
-                        >
-                          Sil
-                        </button>
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setError(null)
+                              setEditTarget(m)
+                            }}
+                            disabled={deleting || saving}
+                            className="text-xs font-medium text-gray-600 hover:text-gray-900 disabled:opacity-40"
+                          >
+                            Düzenle
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setError(null)
+                              setTarget(m)
+                            }}
+                            disabled={deleting || saving}
+                            className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-40"
+                          >
+                            Sil
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -250,6 +308,97 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
           </div>
         )}
       </ConfirmDialog>
+
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => !saving && setEditTarget(null)}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Hareketi düzenle</h2>
+                <p className="text-xs text-gray-400 mt-0.5 font-mono">
+                  {editTarget.voucher_number || editTarget.id.slice(0, 8)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !saving && setEditTarget(null)}
+                disabled={saving}
+                className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={saveEdit} className="px-6 py-5 space-y-4">
+              <p className="text-xs text-gray-500">
+                {movementTypeLabel(editTarget.movement_type)} · {editTarget.fabric_name || '—'} ·{' '}
+                {formatQtyWithUnit(editTarget.amount, editTarget.fabric_unit)}
+                <span className="block mt-1 text-gray-400">Miktar değiştirilemez.</span>
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Tarih <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className={inputCls}
+                  disabled={saving}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {isGiris(editTarget.movement_type) ? 'Alış fiyatı (₺)' : 'Satış fiyatı (₺)'}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                  className={inputCls}
+                  disabled={saving}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Not</label>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className={inputCls}
+                  disabled={saving}
+                  placeholder="Opsiyonel"
+                />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditTarget(null)}
+                  disabled={saving}
+                  className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-700 disabled:opacity-50 rounded-lg"
+                >
+                  {saving ? 'Kaydediliyor…' : 'Kaydet'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

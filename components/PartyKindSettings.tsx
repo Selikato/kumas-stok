@@ -10,8 +10,10 @@ import {
   type Party,
   type PartyKind,
 } from '@/lib/cari'
-import { fmt } from '@/lib/helpers'
+import { fmt, parsePositiveNumber } from '@/lib/helpers'
 import { inputCls } from '@/lib/stockHelpers'
+import { toTry, type MoneyCurrency } from '@/lib/money'
+import CurrencyFields from '@/components/CurrencyFields'
 
 type Props = {
   kind: Extract<PartyKind, 'tedarikci' | 'musteri'>
@@ -29,6 +31,8 @@ type Draft = {
   phone: string
   openingAmount: string
   openingSide: 'borc' | 'alacak'
+  currency: MoneyCurrency
+  fxRate: string
 }
 
 function emptyDraft(kind: 'tedarikci' | 'musteri'): Draft {
@@ -37,6 +41,8 @@ function emptyDraft(kind: 'tedarikci' | 'musteri'): Draft {
     phone: '',
     openingAmount: '',
     openingSide: kind === 'tedarikci' ? 'borc' : 'alacak',
+    currency: 'TRY',
+    fxRate: '',
   }
 }
 
@@ -69,18 +75,36 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
       ? 'Örn. tedarikçiye 300.000 ₺ borç → tutar 300000, yön Borç'
       : 'Örn. müşteriden 50.000 ₺ alacak → tutar 50000, yön Alacak'
 
-  function parseOpening(amountStr: string, side: 'borc' | 'alacak'): number | null {
+  function parseOpening(
+    amountStr: string,
+    side: 'borc' | 'alacak',
+    currency: MoneyCurrency,
+    fxRateStr: string
+  ): number | null {
     const amt = amountStr.trim() ? parseFloat(amountStr) : 0
     if (amountStr.trim() && (isNaN(amt) || amt < 0)) return null
-    return toOpeningBalance(amt || 0, side)
+    if (!amountStr.trim() || amt === 0) return toOpeningBalance(0, side)
+    try {
+      const { tryAmount } = toTry(
+        amt,
+        currency,
+        currency === 'USD' ? parsePositiveNumber(fxRateStr) : 1
+      )
+      return toOpeningBalance(tryAmount, side)
+    } catch {
+      return null
+    }
   }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = draft.name.trim()
     if (!trimmed) { setError('İsim zorunlu.'); return }
-    const opening = parseOpening(draft.openingAmount, draft.openingSide)
-    if (opening == null) { setError('Geçerli başlangıç bakiyesi giriniz.'); return }
+    const opening = parseOpening(draft.openingAmount, draft.openingSide, draft.currency, draft.fxRate)
+    if (opening == null) {
+      setError(draft.currency === 'USD' ? 'Geçerli tutar ve kur giriniz.' : 'Geçerli başlangıç bakiyesi giriniz.')
+      return
+    }
 
     setLoading(true)
     setError(null)
@@ -134,6 +158,8 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
       phone: p.phone || '',
       openingAmount: o.amount ? String(o.amount) : '',
       openingSide: o.side,
+      currency: 'TRY',
+      fxRate: '',
     })
     setError(null)
     setMessage(null)
@@ -142,8 +168,11 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
   async function saveEdit(p: Party) {
     const trimmed = edit.name.trim()
     if (!trimmed) { setError('İsim zorunlu.'); return }
-    const opening = parseOpening(edit.openingAmount, edit.openingSide)
-    if (opening == null) { setError('Geçerli başlangıç bakiyesi giriniz.'); return }
+    const opening = parseOpening(edit.openingAmount, edit.openingSide, edit.currency, edit.fxRate)
+    if (opening == null) {
+      setError(edit.currency === 'USD' ? 'Geçerli tutar ve kur giriniz.' : 'Geçerli başlangıç bakiyesi giriniz.')
+      return
+    }
 
     setLoading(true)
     setError(null)
@@ -259,6 +288,13 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
             Ekle
           </button>
         </div>
+        <CurrencyFields
+          currency={draft.currency}
+          fxRate={draft.fxRate}
+          onCurrencyChange={(c) => setDraft((d) => ({ ...d, currency: c }))}
+          onFxRateChange={(v) => setDraft((d) => ({ ...d, fxRate: v }))}
+          disabled={loading}
+        />
         <p className="text-[11px] text-gray-400">{helpText}</p>
       </form>
 
@@ -360,6 +396,13 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
                         <option value="alacak">Alacak</option>
                       </select>
                     </div>
+                    <CurrencyFields
+                      currency={edit.currency}
+                      fxRate={edit.fxRate}
+                      onCurrencyChange={(c) => setEdit((d) => ({ ...d, currency: c }))}
+                      onFxRateChange={(v) => setEdit((d) => ({ ...d, fxRate: v }))}
+                      disabled={loading}
+                    />
                     <div className="flex gap-2">
                       <button
                         type="button"
