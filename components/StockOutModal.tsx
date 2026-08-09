@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { fmt, parsePositiveNumber, parseNonNegativeNumber, todayISODate, unitLabel } from '@/lib/helpers'
@@ -33,6 +33,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
   const [parties, setParties] = useState<Party[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const submittingRef = useRef(false)
 
   const fabric = stockedFabrics.find((f) => f.id === fabricId) ?? null
   const customers = parties.filter((p) => p.kind === 'musteri' || p.kind === 'her_ikisi')
@@ -123,6 +124,8 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
       lines.push({ rollId, amount: amt })
     }
 
+    if (submittingRef.current) return
+    submittingRef.current = true
     setLoading(true)
     setError(null)
 
@@ -160,6 +163,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
       setError(msg)
       onError(msg)
     } finally {
+      submittingRef.current = false
       setLoading(false)
     }
   }

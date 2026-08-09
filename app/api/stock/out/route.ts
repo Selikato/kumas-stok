@@ -27,7 +27,10 @@ export async function POST(request: Request) {
   const dest = body.destination?.trim()
   const occurredAt = body.occurredAt
   const partyId = body.partyId || null
-  const sale = body.salePrice != null ? Number(body.salePrice) : null
+  const sale =
+    body.salePrice != null && !Number.isNaN(Number(body.salePrice))
+      ? Number(body.salePrice)
+      : null
   const lines = body.lines || []
 
   if (!dest) return NextResponse.json({ error: 'Nereye gitti zorunlu.' }, { status: 400 })
@@ -37,9 +40,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Cari alacak için satış fiyatı zorunlu.' }, { status: 400 })
   }
 
-  const sb = createServiceClient()
+  let sb
+  try {
+    sb = createServiceClient()
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Sunucu yapılandırma hatası'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+
   const succeeded: string[] = []
-  const failed: string[] = []
+  const failures: string[] = []
   let totalCost = 0
   let totalSale = 0
   let totalAmt = 0
@@ -48,24 +58,25 @@ export async function POST(request: Request) {
   for (const line of lines) {
     const amt = Number(line.amount)
     if (!line.rollId || !(amt > 0)) {
-      failed.push(line.rollId || '?')
+      failures.push('Geçersiz satır')
       continue
     }
 
     const { data: fresh, error: fetchErr } = await sb
       .from('rolls')
-      .select('quantity, unit_price')
+      .select('id, quantity, unit_price, roll_number')
       .eq('id', line.rollId)
       .single()
 
     if (fetchErr || !fresh) {
-      failed.push(line.rollId)
+      failures.push(`Kayıt okunamadı: ${fetchErr?.message || line.rollId}`)
       continue
     }
 
+    const label = fresh.roll_number || line.rollId.slice(0, 8)
     const currentQty = Number(fresh.quantity)
     if (amt > currentQty) {
-      failed.push(line.rollId)
+      failures.push(`${label}: stok yetersiz (${currentQty})`)
       continue
     }
 
@@ -79,11 +90,15 @@ export async function POST(request: Request) {
       .update({ quantity: newQty })
       .eq('id', line.rollId)
       .gte('quantity', amt)
-      .select('id')
+      .select('id, quantity')
       .maybeSingle()
 
-    if (updateErr || !updated) {
-      failed.push(line.rollId)
+    if (updateErr) {
+      failures.push(`${label}: stok güncellenemedi (${updateErr.message})`)
+      continue
+    }
+    if (!updated) {
+      failures.push(`${label}: stok güncellenemedi (0 satır). RLS veya eşzamanlı işlem.`)
       continue
     }
 
@@ -129,14 +144,19 @@ export async function POST(request: Request) {
       succeeded.push(line.rollId)
     } catch (err) {
       await sb.from('rolls').update({ quantity: currentQty }).eq('id', line.rollId)
-      console.error('stock out line failed', err)
-      failed.push(line.rollId)
+      const msg = err instanceof Error ? err.message : 'hareket yazılamadı'
+      failures.push(`${label}: ${msg}`)
     }
   }
 
   if (succeeded.length === 0) {
     return NextResponse.json(
-      { error: 'Hiçbir çıkış yapılamadı. Stoklar güncellenmiş olabilir.' },
+      {
+        error: failures.length
+          ? `Çıkış yapılamadı: ${failures.join(' · ')}`
+          : 'Hiçbir çıkış yapılamadı. Stoklar güncellenmiş olabilir.',
+        failures,
+      },
       { status: 400 }
     )
   }
@@ -148,7 +168,8 @@ export async function POST(request: Request) {
     totalCost,
     totalSale,
     succeeded: succeeded.length,
-    failed: failed.length,
+    failed: failures.length,
+    failures,
     destination: dest,
     fabricName,
   })
