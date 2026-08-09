@@ -25,6 +25,35 @@ export function fmtQty(n: number): string {
   return n.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
 }
 
+export type FabricUnit = 'metre' | 'kg'
+
+export function unitLabel(unit: string | null | undefined): string {
+  if (unit === 'kg') return 'kg'
+  if (unit === 'metre') return 'm'
+  return unit?.trim() || ''
+}
+
+export function formatQtyWithUnit(n: number, unit: string | null | undefined): string {
+  const label = unitLabel(unit)
+  return label ? `${fmtQty(n)} ${label}` : fmtQty(n)
+}
+
+/** YYYY-MM-DD for date inputs (local timezone) */
+export function todayISODate(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+export function formatTRDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  if (!y || !m || !d) return iso
+  return `${d}.${m}.${y}`
+}
+
 export function parsePositiveNumber(value: string): number | null {
   const n = parseFloat(value)
   if (!value.trim() || isNaN(n) || n <= 0) return null
