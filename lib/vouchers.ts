@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabaseClient'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { supabase as browserClient } from '@/lib/supabaseClient'
 
 export type VoucherKind = 'GIR' | 'CIK' | 'CAR'
 
@@ -9,10 +10,14 @@ function fallbackVoucher(kind: VoucherKind): string {
 }
 
 /** Tek kullanıcılı MVP fiş no üretici. Tablo yoksa zaman damgalı fallback. */
-export async function nextVoucherNumber(kind: VoucherKind): Promise<string> {
+export async function nextVoucherNumber(
+  kind: VoucherKind,
+  client?: SupabaseClient
+): Promise<string> {
+  const sb = client ?? browserClient
   const year = new Date().getFullYear()
 
-  const { data: existing, error: fetchErr } = await supabase
+  const { data: existing, error: fetchErr } = await sb
     .from('voucher_sequences')
     .select('last_value')
     .eq('year', year)
@@ -27,7 +32,7 @@ export async function nextVoucherNumber(kind: VoucherKind): Promise<string> {
   const next = (existing?.last_value ?? 0) + 1
 
   if (existing) {
-    const { error } = await supabase
+    const { error } = await sb
       .from('voucher_sequences')
       .update({ last_value: next })
       .eq('year', year)
@@ -35,18 +40,18 @@ export async function nextVoucherNumber(kind: VoucherKind): Promise<string> {
       .eq('last_value', existing.last_value)
     if (error) return fallbackVoucher(kind)
   } else {
-    const { error } = await supabase
+    const { error } = await sb
       .from('voucher_sequences')
       .insert({ year, kind, last_value: next })
     if (error) {
-      const { data: again } = await supabase
+      const { data: again } = await sb
         .from('voucher_sequences')
         .select('last_value')
         .eq('year', year)
         .eq('kind', kind)
         .maybeSingle()
       const retry = (again?.last_value ?? 0) + 1
-      const { error: upErr } = await supabase
+      const { error: upErr } = await sb
         .from('voucher_sequences')
         .update({ last_value: retry })
         .eq('year', year)

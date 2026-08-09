@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { createServiceClient } from '@/lib/supabaseAdmin'
 import { deleteMovement } from '@/lib/dbWrites'
-import { AUTH_COOKIE, verifySessionToken } from '@/lib/auth/session'
+import { requireSession } from '@/lib/apiAuth'
 
 export async function POST(request: Request) {
-  const jar = await cookies()
-  const token = jar.get(AUTH_COOKIE)?.value
-  if (!(await verifySessionToken(token))) {
-    return NextResponse.json({ error: 'Oturum gerekli.' }, { status: 401 })
-  }
+  const denied = await requireSession()
+  if (denied) return denied
 
   let body: { id?: string }
   try {

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { fmt, parsePositiveNumber, parseNonNegativeNumber, todayISODate, unitLabel } from '@/lib/helpers'
 import { inputCls } from '@/lib/stockHelpers'
-import { insertMovement, insertAccountEntry } from '@/lib/dbWrites'
 import type { Fabric, Roll } from '@/app/page'
 import { totalQty } from '@/lib/fabricStats'
 import type { Party } from '@/lib/cari'
@@ -111,7 +110,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
     if (salePrice.trim() && sale == null) { setError('Geçerli satış fiyatı giriniz.'); return }
     if (partyId && sale == null) { setError('Cari alacak için satış fiyatı zorunludur.'); return }
 
-    const lines: { rollId: string; amt: number; unitCost: number }[] = []
+    const lines: { rollId: string; amount: number }[] = []
     for (const rollId of selectedIds) {
       const amt = parsePositiveNumber(amounts[rollId] ?? '')
       if (amt == null) { setError('Seçili her kayıt için geçerli miktar giriniz.'); return }
@@ -121,105 +120,41 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
         setError(`${roll.lot_number || roll.roll_number || 'Kayıt'}: mevcut miktardan fazla çıkış yapılamaz.`)
         return
       }
-      lines.push({ rollId, amt, unitCost: Number(roll.unit_price ?? 0) })
+      lines.push({ rollId, amount: amt })
     }
 
     setLoading(true)
     setError(null)
 
-    const succeeded: string[] = []
-    const failed: string[] = []
-    let totalCost = 0
-    let totalSale = 0
-    let lastVoucher = ''
-
     try {
-      for (const line of lines) {
-        const { data: fresh, error: fetchErr } = await supabase
-          .from('rolls')
-          .select('quantity, unit_price')
-          .eq('id', line.rollId)
-          .single()
-
-        if (fetchErr || !fresh) { failed.push(line.rollId); continue }
-
-        const currentQty = Number(fresh.quantity)
-        if (line.amt > currentQty) { failed.push(line.rollId); continue }
-
-        const unitCost = Number(fresh.unit_price ?? line.unitCost)
-        const newQty = currentQty - line.amt
-        const costTotal = line.amt * unitCost
-        const saleTotal = sale != null ? line.amt * sale : null
-
-        const { data: updated, error: updateErr } = await supabase
-          .from('rolls')
-          .update({ quantity: newQty })
-          .eq('id', line.rollId)
-          .gte('quantity', line.amt)
-          .select('id')
-          .maybeSingle()
-
-        if (updateErr || !updated) { failed.push(line.rollId); continue }
-
-        try {
-          const mv = await insertMovement({
-            roll_id: line.rollId,
-            movement_type: 'CIKIS',
-            amount: line.amt,
-            occurred_at: occurredAt,
-            notes: `Çıkış | Nereye: ${dest}${sale != null ? ` | Satış: ₺${sale}` : ''}`,
-            party_id: partyId || null,
-            unit_price: sale,
-            unit_cost: unitCost,
-            line_total: saleTotal ?? costTotal,
-          })
-          lastVoucher = mv.voucher_number
-          totalCost += costTotal
-          if (saleTotal != null) totalSale += saleTotal
-
-          if (partyId && saleTotal != null && saleTotal > 0) {
-            try {
-              await insertAccountEntry({
-                party_id: partyId,
-                entry_type: 'alacak',
-                amount: saleTotal,
-                occurred_at: occurredAt,
-                notes: `${fabric.name} satış · ${mv.voucher_number}`,
-                movement_id: mv.id,
-                voucher_number: mv.voucher_number,
-              })
-            } catch (cariErr) {
-              console.error('cari alacak:', cariErr)
-            }
-          }
-        } catch {
-          await supabase.from('rolls').update({ quantity: currentQty }).eq('id', line.rollId)
-          failed.push(line.rollId)
-          continue
-        }
-
-        succeeded.push(line.rollId)
-      }
+      const res = await fetch('/api/stock/out', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fabricName: fabric.name,
+          destination: dest,
+          occurredAt,
+          partyId: partyId || null,
+          salePrice: sale,
+          lines,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Çıkış yapılamadı.')
 
       router.refresh()
-
-      if (succeeded.length === 0) {
-        throw new Error('Hiçbir çıkış yapılamadı. Stoklar güncellenmiş olabilir.')
-      }
-
-      const totalAmt = lines.filter((l) => succeeded.includes(l.rollId)).reduce((s, l) => s + l.amt, 0)
-      const parts = [
-        lastVoucher,
-        `${fabric.name}`,
-        `${totalAmt}${unit ? ` ${unit}` : ''}`,
-        `maliyet ₺${fmt(totalCost)}`,
-      ]
-      if (totalSale > 0) parts.push(`satış ₺${fmt(totalSale)}`)
-      parts.push(`→ ${dest}`)
-
       onClose()
+
+      const parts = [
+        data.voucher_number,
+        fabric.name,
+        `${data.totalAmt}${unit ? ` ${unit}` : ''}`,
+        `maliyet ₺${fmt(Number(data.totalCost || 0))}`,
+      ]
+      if (Number(data.totalSale) > 0) parts.push(`satış ₺${fmt(Number(data.totalSale))}`)
+      parts.push(`→ ${dest}`)
       onSuccess(parts.filter(Boolean).join(' · '))
-      if (failed.length > 0) onError(`${failed.length} kayıt işlenemedi.`)
+      if (data.failed > 0) onError(`${data.failed} kayıt işlenemedi.`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Bir hata oluştu.'
       setError(msg)

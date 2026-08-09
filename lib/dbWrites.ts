@@ -52,7 +52,7 @@ export async function insertMovement(
   const sb = clientOrDefault(client)
   const voucher =
     row.voucher_number ||
-    (await nextVoucherNumber(row.movement_type === 'GIRIS' ? 'GIR' : 'CIK'))
+    (await nextVoucherNumber(row.movement_type === 'GIRIS' ? 'GIR' : 'CIK', sb))
 
   const payload = {
     roll_id: row.roll_id,
@@ -131,7 +131,7 @@ export async function insertAccountEntry(
   client?: SupabaseClient
 ): Promise<{ id: string; voucher_number: string }> {
   const sb = clientOrDefault(client)
-  const voucher = row.voucher_number || (await nextVoucherNumber('CAR'))
+  const voucher = row.voucher_number || (await nextVoucherNumber('CAR', sb))
 
   const { data, error } = await sb
     .from('account_entries')

@@ -4,16 +4,13 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import {
-  generateFabricCode,
-  generateRollNumber,
   parsePositiveNumber,
   parseNonNegativeNumber,
   todayISODate,
   unitLabel,
   type FabricUnit,
 } from '@/lib/helpers'
-import { getOrCreateVariant, inputCls } from '@/lib/stockHelpers'
-import { insertRoll, insertMovement, insertAccountEntry } from '@/lib/dbWrites'
+import { inputCls } from '@/lib/stockHelpers'
 import type { Fabric } from '@/app/page'
 import type { Party } from '@/lib/cari'
 
@@ -153,101 +150,42 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     const source = form.source.trim() || suppliers.find((p) => p.id === form.partyId)?.name || ''
     if (!source) { setError('Tedarikçi seçin veya nereden geldiğini yazın.'); return }
 
+    if (!pickingExisting) {
+      if (!form.fabric_type) { setError('Kumaş tipi zorunludur.'); return }
+      if (!form.unit) { setError('Birim zorunludur.'); return }
+    }
+
     const warehouse = form.warehouse.trim() || 'Depo'
-    const lineTotal = qty * price
 
     setLoading(true)
     setError(null)
 
     try {
-      let fabricId: string
-      let fabricUnit: string | null = null
-
-      if (pickingExisting && selectedFabric) {
-        fabricId = selectedFabric.id
-        fabricUnit = selectedFabric.unit
-      } else {
-        if (!form.fabric_type) { setError('Kumaş tipi zorunludur.'); setLoading(false); return }
-        if (!form.unit) { setError('Birim zorunludur.'); setLoading(false); return }
-
-        const { data: existing } = await supabase
-          .from('fabrics')
-          .select('id, unit')
-          .eq('name', form.name.trim())
-          .maybeSingle()
-
-        if (existing) {
-          fabricId = existing.id
-          fabricUnit = existing.unit
-        } else {
-          const { data: newFabric, error: fabricErr } = await supabase
-            .from('fabrics')
-            .insert({
-              name: form.name.trim(),
-              fabric_code: generateFabricCode(form.name),
-              fabric_type: form.fabric_type,
-              unit: form.unit,
-            })
-            .select('id, unit')
-            .single()
-          if (fabricErr) throw new Error(fabricErr.message)
-          fabricId = newFabric.id
-          fabricUnit = newFabric.unit
-        }
-      }
-
-      const variantId = await getOrCreateVariant(fabricId)
-      const newRoll = await insertRoll({
-        variant_id: variantId,
-        roll_number: generateRollNumber(),
-        lot_number: source,
-        quantity: qty,
-        unit_price: price,
-        location: warehouse,
-        received_at: form.occurred_at,
+      const res = await fetch('/api/stock/in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fabricId: pickingExisting ? form.fabricId : null,
+          name: form.name.trim(),
+          fabricType: form.fabric_type || undefined,
+          unit: form.unit || undefined,
+          quantity: qty,
+          unitPrice: price,
+          partyId: form.partyId || null,
+          source,
+          warehouse,
+          occurredAt: form.occurred_at,
+        }),
       })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Giriş kaydedilemedi.')
 
-      let movementId: string
-      let voucher: string
-      try {
-        const mv = await insertMovement({
-          roll_id: newRoll.id,
-          movement_type: 'GIRIS',
-          amount: qty,
-          occurred_at: form.occurred_at,
-          notes: `Giriş | Nereden: ${source} | Depo: ${warehouse}`,
-          party_id: form.partyId || null,
-          unit_price: price,
-          unit_cost: null,
-          line_total: lineTotal,
-        })
-        movementId = mv.id
-        voucher = mv.voucher_number
-      } catch (mvErr) {
-        await supabase.from('rolls').delete().eq('id', newRoll.id)
-        throw mvErr
-      }
-
-      if (form.partyId && lineTotal > 0) {
-        try {
-          await insertAccountEntry({
-            party_id: form.partyId,
-            entry_type: 'borc',
-            amount: lineTotal,
-            occurred_at: form.occurred_at,
-            notes: `${form.name.trim()} alış · ${voucher}`,
-            movement_id: movementId,
-            voucher_number: voucher,
-          })
-        } catch (cariErr) {
-          console.error('cari borc:', cariErr)
-        }
-      }
-
-      const unitSuffix = fabricUnit === 'kg' ? 'kg' : fabricUnit === 'metre' ? 'm' : ''
+      const unitSuffix = data.unit === 'kg' ? 'kg' : data.unit === 'metre' ? 'm' : ''
       router.refresh()
       onClose()
-      onSuccess(`${voucher} · ${form.name.trim()} giriş${unitSuffix ? ` (${qty} ${unitSuffix})` : ''} · ₺${lineTotal.toFixed(2)}`)
+      onSuccess(
+        `${data.voucher_number} · ${form.name.trim()} giriş${unitSuffix ? ` (${qty} ${unitSuffix})` : ''} · ₺${Number(data.lineTotal).toFixed(2)}`
+      )
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Bir hata oluştu.'
       setError(msg)
