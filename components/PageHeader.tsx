@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import type { Fabric } from '@/app/page'
@@ -58,8 +59,19 @@ export default function PageHeader({ fabrics = [], showActions = false }: Props)
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-5 min-w-0">
-              <Link href="/" className="text-base font-semibold text-gray-900 tracking-tight shrink-0">
-                Kumaş Stok
+              <Link
+                href="/"
+                className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 rounded-md"
+              >
+                <Image
+                  src="/trust-stock-logo-clear.png"
+                  alt="Trust Stock"
+                  width={160}
+                  height={36}
+                  className="h-9 w-auto"
+                  priority
+                  unoptimized
+                />
               </Link>
               <nav className="hidden md:flex items-center gap-0.5 text-sm">
                 {NAV.map((item) => (

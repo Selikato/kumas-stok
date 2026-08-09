@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useState, Suspense } from 'react'
+import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 function LoginForm() {
@@ -41,7 +42,7 @@ function LoginForm() {
     <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
       <div>
         <h1 className="text-lg font-semibold text-gray-900">Giriş Yap</h1>
-        <p className="text-xs text-gray-400 mt-1">Kumaş Stok Takibi</p>
+        <p className="text-xs text-gray-400 mt-1">Trust Stock hesabınızla devam edin</p>
       </div>
 
       <div>
@@ -87,7 +88,18 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm space-y-5">
+        <div className="flex justify-center">
+          <Image
+            src="/trust-stock-logo-clear.png"
+            alt="Trust Stock"
+            width={280}
+            height={64}
+            className="h-14 w-auto"
+            priority
+            unoptimized
+          />
+        </div>
         <Suspense fallback={<div className="bg-white rounded-xl border border-gray-200 p-6 text-sm text-gray-400">Yükleniyor…</div>}>
           <LoginForm />
         </Suspense>

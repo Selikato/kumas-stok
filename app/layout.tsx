@@ -13,8 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kumaş Stok Takibi",
+  title: "Trust Stock",
   description: "Kumaş stok giriş, çıkış ve takip uygulaması",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({
