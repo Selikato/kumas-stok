@@ -7,7 +7,7 @@ export function createServiceClient() {
   if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL eksik')
   if (!key) {
     throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY eksik. .env.local dosyasını kontrol edip `npm run dev` yeniden başlatın.'
+      'SUPABASE_SERVICE_ROLE_KEY eksik. Vercel/hosting ortam değişkenlerine ekleyin (veya yerel için .env.local + restart).'
     )
   }
   return createClient(url, key, {
