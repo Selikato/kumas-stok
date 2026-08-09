@@ -15,12 +15,9 @@ import type { Fabric } from '@/app/page'
 import type { Party } from '@/lib/cari'
 import QuickPartyAdd from '@/components/QuickPartyAdd'
 
-type FabricTypeOption = { id: string; name: string }
-
 type FormData = {
   fabricId: string
   name: string
-  fabric_type: string
   unit: FabricUnit | ''
   quantity: string
   unit_price: string
@@ -31,7 +28,6 @@ type FormData = {
 const EMPTY: FormData = {
   fabricId: '',
   name: '',
-  fabric_type: '',
   unit: '',
   quantity: '',
   unit_price: '',
@@ -50,7 +46,6 @@ type Props = {
 export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess, onError }: Props) {
   const router = useRouter()
   const [form, setForm] = useState<FormData>(EMPTY)
-  const [fabricTypes, setFabricTypes] = useState<FabricTypeOption[]>([])
   const [parties, setParties] = useState<Party[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -74,25 +69,30 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     setError(null)
     setTimeout(() => firstInputRef.current?.focus(), 50)
 
-    supabase.from('fabric_types').select('id, name').order('name').then(async ({ data, error: typeErr }) => {
-      if (!typeErr && data && data.length > 0) {
-        setFabricTypes(data as FabricTypeOption[])
-        return
-      }
-      const { data: fabricRows } = await supabase.from('fabrics').select('fabric_type')
-      const names = [...new Set(
-        (fabricRows ?? [])
-          .map((f: { fabric_type: string | null }) => f.fabric_type?.trim())
-          .filter((n): n is string => !!n)
-      )].sort((a, b) => a.localeCompare(b, 'tr'))
-      setFabricTypes(names.map((name) => ({ id: name, name })))
-    })
-
     supabase
       .from('parties')
-      .select('id, name, kind, phone, notes')
+      .select('id, name, kind, phone, notes, opening_balance')
       .order('name')
-      .then(({ data }) => setParties((data as Party[]) ?? []))
+      .then(({ data, error: err }) => {
+        if (!err && data) {
+          setParties(
+            (data as Party[]).map((p) => ({
+              ...p,
+              opening_balance: Number(p.opening_balance) || 0,
+            }))
+          )
+          return
+        }
+        supabase
+          .from('parties')
+          .select('id, name, kind, phone, notes')
+          .order('name')
+          .then(({ data: d2 }) =>
+            setParties(
+              ((d2 as Party[]) ?? []).map((p) => ({ ...p, opening_balance: 0 }))
+            )
+          )
+      })
   }, [open, fabrics.length])
 
   useEffect(() => {
@@ -110,11 +110,11 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
 
   function onFabricPick(value: string) {
     if (value === '__new__') {
-      setForm((prev) => ({ ...prev, fabricId: '__new__', name: '', fabric_type: '', unit: '' }))
+      setForm((prev) => ({ ...prev, fabricId: '__new__', name: '', unit: '' }))
       return
     }
     if (value === '') {
-      setForm((prev) => ({ ...prev, fabricId: '', name: '', fabric_type: '', unit: '' }))
+      setForm((prev) => ({ ...prev, fabricId: '', name: '', unit: '' }))
       return
     }
     const fabric = fabrics.find((f) => f.id === value)
@@ -123,7 +123,6 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
       ...prev,
       fabricId: fabric.id,
       name: fabric.name,
-      fabric_type: fabric.fabric_type ?? '',
       unit: (fabric.unit as FabricUnit) || '',
     }))
   }
@@ -141,9 +140,9 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     const party = suppliers.find((p) => p.id === form.partyId)
     if (!party) { setError('Tedarikçi seçiniz.'); return }
 
-    if (!pickingExisting) {
-      if (!form.fabric_type) { setError('Kumaş tipi zorunludur.'); return }
-      if (!form.unit) { setError('Birim zorunludur.'); return }
+    if (!pickingExisting && !form.unit) {
+      setError('Birim zorunludur.')
+      return
     }
 
     setLoading(true)
@@ -156,7 +155,6 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
         body: JSON.stringify({
           fabricId: pickingExisting ? form.fabricId : null,
           name: form.name.trim(),
-          fabricType: form.fabric_type || undefined,
           unit: form.unit || undefined,
           quantity: qty,
           unitPrice: price,
@@ -211,50 +209,26 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
               ))}
               <option value="__new__">+ Yeni kumaş oluştur</option>
             </select>
-            <p className="text-[11px] text-gray-400 mt-1">
-              Ayarlardaki <span className="font-medium">kumaş tipi</span> burada değil; “+ Yeni kumaş” içinde tip seçilir.
-            </p>
           </Field>
 
           {(isNew || form.fabricId === '__new__') && (
-            <>
+            <div className="grid grid-cols-2 gap-3">
               <Field label="Kumaş Adı" required>
                 <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="ör. Pamuk Poplin" className={inputCls} disabled={loading} />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Kumaş Tipi" required>
-                  <select
-                    value={form.fabric_type}
-                    onChange={(e) => {
-                      const typeName = e.target.value
-                      setForm((prev) => ({
-                        ...prev,
-                        fabric_type: typeName,
-                        name: prev.name.trim() ? prev.name : typeName,
-                      }))
-                    }}
-                    className={inputCls}
-                    disabled={loading}
-                  >
-                    <option value="">Seçiniz</option>
-                    {fabricTypes.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
-                  </select>
-                </Field>
-                <Field label="Birim" required>
-                  <select value={form.unit} onChange={(e) => set('unit', e.target.value)} className={inputCls} disabled={loading}>
-                    <option value="">Seçiniz</option>
-                    <option value="metre">Metre</option>
-                    <option value="kg">Kg</option>
-                  </select>
-                </Field>
-              </div>
-            </>
+              <Field label="Birim" required>
+                <select value={form.unit} onChange={(e) => set('unit', e.target.value)} className={inputCls} disabled={loading}>
+                  <option value="">Seçiniz</option>
+                  <option value="metre">Metre</option>
+                  <option value="kg">Kg</option>
+                </select>
+              </Field>
+            </div>
           )}
 
           {pickingExisting && selectedFabric && (
             <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
               Birim: <span className="font-medium text-gray-800">{unitLabel(selectedFabric.unit) || '—'}</span>
-              {selectedFabric.fabric_type ? <> · Tip: <span className="font-medium text-gray-800">{selectedFabric.fabric_type}</span></> : null}
             </p>
           )}
 
@@ -268,7 +242,7 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
                 kind="tedarikci"
                 disabled={loading}
                 onCreated={(party) => {
-                  setParties((prev) => [...prev, party].sort((a, b) => a.name.localeCompare(b.name, 'tr')))
+                  setParties((prev) => [...prev, { ...party, opening_balance: party.opening_balance ?? 0 }].sort((a, b) => a.name.localeCompare(b.name, 'tr')))
                   set('partyId', party.id)
                 }}
               />

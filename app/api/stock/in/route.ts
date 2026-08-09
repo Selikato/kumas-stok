@@ -11,7 +11,6 @@ export async function POST(request: Request) {
   let body: {
     fabricId?: string | null
     name?: string
-    fabricType?: string
     unit?: string
     quantity?: number
     unitPrice?: number
@@ -71,7 +70,6 @@ export async function POST(request: Request) {
       fabricId = fabric.id
       fabricUnit = fabric.unit
     } else {
-      if (!body.fabricType) throw new Error('Kumaş tipi zorunlu.')
       if (!body.unit) throw new Error('Birim zorunlu.')
 
       const { data: existing } = await sb
@@ -89,7 +87,6 @@ export async function POST(request: Request) {
           .insert({
             name,
             fabric_code: generateFabricCode(name),
-            fabric_type: body.fabricType,
             unit: body.unit,
           })
           .select('id, unit')

@@ -18,7 +18,6 @@ export type Variant = {
 export type Fabric = {
   id: string
   name: string
-  fabric_type: string | null
   unit: string | null
   variants: Variant[]
 }

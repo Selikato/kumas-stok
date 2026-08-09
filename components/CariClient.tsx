@@ -49,7 +49,13 @@ export default function CariClient({ parties: initialParties, entries: initialEn
   const balances = useMemo(() => {
     const map = new Map<string, number>()
     for (const p of parties) {
-      map.set(p.id, partyBalance(entries.filter((e) => e.party_id === p.id)))
+      map.set(
+        p.id,
+        partyBalance(
+          entries.filter((e) => e.party_id === p.id),
+          Number(p.opening_balance) || 0
+        )
+      )
     }
     return map
   }, [parties, entries])
@@ -214,6 +220,7 @@ export default function CariClient({ parties: initialParties, entries: initialEn
                   const bal = balances.get(selected.id) ?? 0
                   const b = formatBalance(bal)
                   const reverse = isReverseBalance(selected.kind, bal)
+                  const opening = formatBalance(Number(selected.opening_balance) || 0)
                   return (
                     <div className="text-right">
                       <p className={`text-xs ${reverse ? 'text-amber-700 font-medium' : 'text-gray-400'}`}>
@@ -222,6 +229,11 @@ export default function CariClient({ parties: initialParties, entries: initialEn
                       <p className={`text-xl font-semibold tabular-nums ${reverse ? 'text-amber-700' : 'text-gray-900'}`}>
                         {b.amount === 0 ? '₺0' : `₺${fmt(b.amount)}`}
                       </p>
+                      {opening.amount > 0 && (
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Başlangıç: ₺{fmt(opening.amount)} {opening.label}
+                        </p>
+                      )}
                     </div>
                   )
                 })()}

@@ -6,6 +6,8 @@ export type Party = {
   kind: PartyKind
   phone: string | null
   notes: string | null
+  /** + alacak, − borç */
+  opening_balance: number
 }
 
 export type AccountEntryType = 'borc' | 'alacak' | 'odeme' | 'tahsilat'
@@ -34,8 +36,11 @@ export type AccountEntry = {
 }
 
 /** Pozitif = onlar bize borçlu (alacak), negatif = biz onlara borçluyuz (borç) */
-export function partyBalance(entries: Pick<AccountEntry, 'entry_type' | 'amount'>[]): number {
-  let bal = 0
+export function partyBalance(
+  entries: Pick<AccountEntry, 'entry_type' | 'amount'>[],
+  openingBalance = 0
+): number {
+  let bal = Number(openingBalance) || 0
   for (const e of entries) {
     const a = Number(e.amount)
     if (e.entry_type === 'alacak') bal += a
@@ -50,6 +55,17 @@ export function formatBalance(bal: number): { label: string; amount: number } {
   if (Math.abs(bal) < 0.005) return { label: 'Bakiye yok', amount: 0 }
   if (bal > 0) return { label: 'Alacak', amount: bal }
   return { label: 'Borç', amount: Math.abs(bal) }
+}
+
+/** UI için: tutar + yön → işaretli opening_balance */
+export function toOpeningBalance(amount: number, side: 'borc' | 'alacak'): number {
+  if (!(amount > 0)) return 0
+  return side === 'alacak' ? amount : -amount
+}
+
+export function fromOpeningBalance(bal: number): { amount: number; side: 'borc' | 'alacak' } {
+  if (bal >= 0) return { amount: bal, side: 'alacak' }
+  return { amount: Math.abs(bal), side: 'borc' }
 }
 
 /** Müşteride borç / tedarikçide alacak = ters bakiye */

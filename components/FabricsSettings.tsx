@@ -5,26 +5,21 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { generateFabricCode, unitLabel, type FabricUnit } from '@/lib/helpers'
 import { inputCls } from '@/lib/stockHelpers'
-import type { FabricType } from '@/components/FabricTypesSettings'
 
 export type FabricRow = {
   id: string
   name: string
-  fabric_type: string | null
   unit: string | null
 }
 
 type Props = {
   initialFabrics: FabricRow[]
-  fabricTypes: FabricType[]
 }
 
-export default function FabricsSettings({ initialFabrics, fabricTypes }: Props) {
+export default function FabricsSettings({ initialFabrics }: Props) {
   const router = useRouter()
   const [fabrics, setFabrics] = useState(initialFabrics)
-  const [types, setTypes] = useState(fabricTypes)
   const [name, setName] = useState('')
-  const [fabricType, setFabricType] = useState('')
   const [unit, setUnit] = useState<FabricUnit | ''>('metre')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,15 +29,10 @@ export default function FabricsSettings({ initialFabrics, fabricTypes }: Props) 
     setFabrics(initialFabrics)
   }, [initialFabrics])
 
-  useEffect(() => {
-    setTypes(fabricTypes)
-  }, [fabricTypes])
-
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) { setError('Kumaş adı zorunlu.'); return }
-    if (!fabricType) { setError('Kumaş tipi seçiniz.'); return }
     if (!unit) { setError('Birim seçiniz.'); return }
     if (fabrics.some((f) => f.name.toLowerCase() === trimmed.toLowerCase())) {
       setError('Bu isimde kumaş zaten var.')
@@ -58,10 +48,9 @@ export default function FabricsSettings({ initialFabrics, fabricTypes }: Props) 
       .insert({
         name: trimmed,
         fabric_code: generateFabricCode(trimmed),
-        fabric_type: fabricType,
         unit,
       })
-      .select('id, name, fabric_type, unit')
+      .select('id, name, unit')
       .single()
 
     setLoading(false)
@@ -128,7 +117,7 @@ export default function FabricsSettings({ initialFabrics, fabricTypes }: Props) 
 
       <form
         onSubmit={handleAdd}
-        className="px-5 py-4 grid grid-cols-1 sm:grid-cols-4 gap-2 border-b border-gray-100"
+        className="px-5 py-4 grid grid-cols-1 sm:grid-cols-3 gap-2 border-b border-gray-100"
       >
         <input
           type="text"
@@ -138,17 +127,6 @@ export default function FabricsSettings({ initialFabrics, fabricTypes }: Props) 
           className={inputCls}
           disabled={loading}
         />
-        <select
-          value={fabricType}
-          onChange={(e) => setFabricType(e.target.value)}
-          className={inputCls}
-          disabled={loading}
-        >
-          <option value="">Tip seçiniz</option>
-          {types.map((t) => (
-            <option key={t.id} value={t.name}>{t.name}</option>
-          ))}
-        </select>
         <select
           value={unit}
           onChange={(e) => setUnit(e.target.value as FabricUnit)}
@@ -160,16 +138,12 @@ export default function FabricsSettings({ initialFabrics, fabricTypes }: Props) 
         </select>
         <button
           type="submit"
-          disabled={loading || types.length === 0}
+          disabled={loading}
           className="px-4 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-700 disabled:opacity-50 rounded-lg"
         >
           Ekle
         </button>
       </form>
-
-      {types.length === 0 && (
-        <p className="px-5 py-2 text-[11px] text-amber-700">Önce kumaş tipi ekleyin.</p>
-      )}
 
       {(error || message) && (
         <div className="px-5 py-3">
@@ -188,9 +162,7 @@ export default function FabricsSettings({ initialFabrics, fabricTypes }: Props) 
             <li key={f.id} className="px-5 py-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-gray-900">{f.name}</p>
-                <p className="text-[11px] text-gray-400">
-                  {[f.fabric_type, unitLabel(f.unit)].filter(Boolean).join(' · ') || '—'}
-                </p>
+                <p className="text-[11px] text-gray-400">{unitLabel(f.unit) || '—'}</p>
               </div>
               <button
                 type="button"

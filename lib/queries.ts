@@ -3,6 +3,18 @@ import type { Party } from '@/lib/cari'
 import type { MovementRow } from '@/lib/movements'
 
 export async function fetchParties(): Promise<Party[]> {
+  const full = await supabase
+    .from('parties')
+    .select('id, name, kind, phone, notes, opening_balance')
+    .order('name')
+
+  if (!full.error) {
+    return ((full.data as Party[]) ?? []).map((p) => ({
+      ...p,
+      opening_balance: Number(p.opening_balance) || 0,
+    }))
+  }
+
   const { data, error } = await supabase
     .from('parties')
     .select('id, name, kind, phone, notes')
@@ -11,7 +23,10 @@ export async function fetchParties(): Promise<Party[]> {
     console.error('parties:', error.message)
     return []
   }
-  return (data as Party[]) ?? []
+  return ((data as Party[]) ?? []).map((p) => ({
+    ...p,
+    opening_balance: 0,
+  }))
 }
 
 export async function fetchMovements(opts?: {

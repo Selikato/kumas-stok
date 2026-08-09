@@ -19,8 +19,7 @@ export default function FabricList({ fabrics }: { fabrics: Fabric[] }) {
     const q = query.toLowerCase().trim()
     if (!q) return fabrics
     return fabrics.filter((f) =>
-      f.name.toLowerCase().includes(q) ||
-      (f.fabric_type?.toLowerCase().includes(q) ?? false)
+      f.name.toLowerCase().includes(q)
     )
   }, [query, fabrics])
 
@@ -87,7 +86,7 @@ export default function FabricList({ fabrics }: { fabrics: Fabric[] }) {
             <thead>
               <tr className="border-b border-gray-100 text-left bg-gray-50">
                 <th className="px-5 py-3 font-medium text-gray-500">Kumaş Adı</th>
-                <th className="px-5 py-3 font-medium text-gray-500">Tip / Birim</th>
+                <th className="px-5 py-3 font-medium text-gray-500">Birim</th>
                 <th className="px-5 py-3 font-medium text-gray-500">Nereden / Depo</th>
                 <th className="px-5 py-3 font-medium text-gray-500 text-right">Kayıt</th>
                 <th className="px-5 py-3 font-medium text-gray-500 text-right">Toplam Miktar</th>
@@ -109,9 +108,7 @@ export default function FabricList({ fabrics }: { fabrics: Fabric[] }) {
                     >
                       <td className="px-5 py-3.5 font-medium text-gray-900">{fabric.name}</td>
                       <td className="px-5 py-3.5 text-xs text-gray-600">
-                        {[fabric.fabric_type, unitLabel(fabric.unit)].filter(Boolean).join(' · ') || (
-                          <span className="text-gray-300">—</span>
-                        )}
+                        {unitLabel(fabric.unit) || <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-5 py-3.5">
                         {route ? (
@@ -171,7 +168,7 @@ export default function FabricList({ fabrics }: { fabrics: Fabric[] }) {
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900 truncate">{fabric.name}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {[fabric.fabric_type, unitLabel(fabric.unit)].filter(Boolean).join(' · ')}
+                        {unitLabel(fabric.unit) || '—'}
                         {totalValue(fabric) > 0 ? ` · ₺${fmt(totalValue(fabric))}` : ''}
                       </p>
                     </div>

@@ -29,9 +29,27 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
     const { data, error: insertErr } = await supabase
       .from('parties')
       .insert({ name: trimmed, kind })
-      .select('id, name, kind, phone, notes')
+      .select('id, name, kind, phone, notes, opening_balance')
       .single()
     setLoading(false)
+
+    if (insertErr?.message?.includes('opening_balance')) {
+      const fb = await supabase
+        .from('parties')
+        .insert({ name: trimmed, kind })
+        .select('id, name, kind, phone, notes')
+        .single()
+      if (fb.error) {
+        setError(fb.error.message.includes('unique') || fb.error.code === '23505'
+          ? 'Bu isimde cari zaten var.'
+          : fb.error.message)
+        return
+      }
+      onCreated({ ...(fb.data as Party), opening_balance: 0 })
+      setName('')
+      setOpen(false)
+      return
+    }
 
     if (insertErr) {
       setError(insertErr.message.includes('unique') || insertErr.code === '23505'
@@ -40,7 +58,7 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
       return
     }
 
-    onCreated(data as Party)
+    onCreated({ ...(data as Party), opening_balance: Number((data as Party).opening_balance) || 0 })
     setName('')
     setOpen(false)
   }

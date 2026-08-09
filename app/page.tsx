@@ -16,7 +16,6 @@ async function getFabrics(): Promise<Fabric[]> {
   const fullSelect = `
       id,
       name,
-      fabric_type,
       unit,
       variants (
         id,
@@ -42,7 +41,7 @@ async function getFabrics(): Promise<Fabric[]> {
     const fallback = await supabase
       .from('fabrics')
       .select(`
-      id, name, fabric_type, unit,
+      id, name, unit,
       variants (
         id, color_name, color_code,
         rolls ( id, roll_number, lot_number, quantity, unit_price, location )
@@ -58,7 +57,6 @@ async function getFabrics(): Promise<Fabric[]> {
     const rows = (fallback.data ?? []) as Array<{
       id: string
       name: string
-      fabric_type: string | null
       unit: string | null
       variants: Array<{
         id: string
