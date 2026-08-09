@@ -133,7 +133,7 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     setForm((prev) => ({
       ...prev,
       partyId: value,
-      source: party ? party.name : prev.source,
+      source: party?.name ?? '',
     }))
   }
 
@@ -147,8 +147,9 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     if (qty == null) { setError('Geçerli bir miktar giriniz.'); return }
     const price = parseNonNegativeNumber(form.unit_price)
     if (price == null) { setError('Geçerli bir fiyat giriniz.'); return }
-    const source = form.source.trim() || suppliers.find((p) => p.id === form.partyId)?.name || ''
-    if (!source) { setError('Tedarikçi seçin veya nereden geldiğini yazın.'); return }
+    const party = suppliers.find((p) => p.id === form.partyId)
+    if (!party) { setError('Tedarikçi seçiniz.'); return }
+    const source = party.name
 
     if (!pickingExisting) {
       if (!form.fabric_type) { setError('Kumaş tipi zorunludur.'); return }
@@ -171,7 +172,7 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
           unit: form.unit || undefined,
           quantity: qty,
           unitPrice: price,
-          partyId: form.partyId || null,
+          partyId: party.id,
           source,
           warehouse,
           occurredAt: form.occurred_at,
@@ -220,8 +221,11 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
               {fabrics.map((f) => (
                 <option key={f.id} value={f.id}>{f.name}{f.unit ? ` (${unitLabel(f.unit)})` : ''}</option>
               ))}
-              <option value="__new__">+ Yeni kumaş</option>
+              <option value="__new__">+ Yeni kumaş oluştur</option>
             </select>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Ayarlardaki tipler burada listelenmez. Yeni kart için “+ Yeni kumaş oluştur” seçin.
+            </p>
           </Field>
 
           {(isNew || form.fabricId === '__new__') && (
@@ -231,7 +235,19 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Kumaş Tipi" required>
-                  <select value={form.fabric_type} onChange={(e) => set('fabric_type', e.target.value)} className={inputCls} disabled={loading}>
+                  <select
+                    value={form.fabric_type}
+                    onChange={(e) => {
+                      const typeName = e.target.value
+                      setForm((prev) => ({
+                        ...prev,
+                        fabric_type: typeName,
+                        name: prev.name.trim() ? prev.name : typeName,
+                      }))
+                    }}
+                    className={inputCls}
+                    disabled={loading}
+                  >
                     <option value="">Seçiniz</option>
                     {fabricTypes.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
                   </select>
@@ -254,18 +270,15 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
             </p>
           )}
 
-          <Field label="Tedarikçi">
+          <Field label="Tedarikçi" required>
             <select value={form.partyId} onChange={(e) => onPartyPick(e.target.value)} className={inputCls} disabled={loading}>
-              <option value="">Seçiniz (opsiyonel)</option>
+              <option value="">Seçiniz</option>
               {suppliers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+            {suppliers.length === 0 && (
+              <p className="text-[11px] text-amber-700 mt-1">Ayarlar → Cariler’den tedarikçi ekleyin.</p>
+            )}
           </Field>
-
-          {!form.partyId && (
-            <Field label="Nereden Geldi" required>
-              <input type="text" value={form.source} onChange={(e) => set('source', e.target.value)} placeholder="ör. Tedarikçi A" className={inputCls} disabled={loading} />
-            </Field>
-          )}
 
           <Field label="Tarih" required>
             <input type="date" value={form.occurred_at} onChange={(e) => set('occurred_at', e.target.value)} className={inputCls} disabled={loading} />

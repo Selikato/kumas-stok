@@ -24,7 +24,6 @@ export async function POST(request: Request) {
   }
 
   const fabricName = body.fabricName?.trim() || 'Kumaş'
-  const dest = body.destination?.trim()
   const occurredAt = body.occurredAt
   const partyId = body.partyId || null
   const sale =
@@ -33,11 +32,11 @@ export async function POST(request: Request) {
       : null
   const lines = body.lines || []
 
-  if (!dest) return NextResponse.json({ error: 'Nereye gitti zorunlu.' }, { status: 400 })
   if (!occurredAt) return NextResponse.json({ error: 'Tarih zorunlu.' }, { status: 400 })
   if (lines.length === 0) return NextResponse.json({ error: 'En az bir stok kaydı seçiniz.' }, { status: 400 })
-  if (partyId && (sale == null || Number.isNaN(sale) || sale < 0)) {
-    return NextResponse.json({ error: 'Cari alacak için satış fiyatı zorunlu.' }, { status: 400 })
+  if (!partyId) return NextResponse.json({ error: 'Müşteri seçiniz.' }, { status: 400 })
+  if (sale == null || Number.isNaN(sale) || sale < 0) {
+    return NextResponse.json({ error: 'Satış fiyatı zorunlu.' }, { status: 400 })
   }
 
   let sb
@@ -47,6 +46,19 @@ export async function POST(request: Request) {
     const msg = err instanceof Error ? err.message : 'Sunucu yapılandırma hatası'
     return NextResponse.json({ error: msg }, { status: 500 })
   }
+
+  const { data: party, error: partyErr } = await sb
+    .from('parties')
+    .select('id, name, kind')
+    .eq('id', partyId)
+    .single()
+  if (partyErr || !party) {
+    return NextResponse.json({ error: 'Müşteri bulunamadı.' }, { status: 400 })
+  }
+  if (party.kind !== 'musteri' && party.kind !== 'her_ikisi') {
+    return NextResponse.json({ error: 'Seçilen cari müşteri değil.' }, { status: 400 })
+  }
+  const resolvedDest = party.name
 
   const succeeded: string[] = []
   const failures: string[] = []
@@ -109,7 +121,7 @@ export async function POST(request: Request) {
           movement_type: 'CIKIS',
           amount: amt,
           occurred_at: occurredAt,
-          notes: `Çıkış | Nereye: ${dest}${sale != null ? ` | Satış: ₺${sale}` : ''}`,
+          notes: `Çıkış | Nereye: ${resolvedDest} | Satış: ₺${sale}`,
           party_id: partyId,
           unit_price: sale,
           unit_cost: unitCost,
@@ -170,7 +182,7 @@ export async function POST(request: Request) {
     succeeded: succeeded.length,
     failed: failures.length,
     failures,
-    destination: dest,
+    destination: resolvedDest,
     fabricName,
   })
 }

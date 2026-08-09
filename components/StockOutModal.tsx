@@ -96,20 +96,20 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
   function onPartyPick(value: string) {
     const party = customers.find((p) => p.id === value)
     setPartyId(value)
-    if (party) setDestination(party.name)
+    setDestination(party?.name ?? '')
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!fabric) { setError('Kumaş seçiniz.'); return }
     if (selectedIds.length === 0) { setError('En az bir stok kaydı seçiniz.'); return }
-    const dest = destination.trim() || customers.find((p) => p.id === partyId)?.name || ''
-    if (!dest) { setError('Müşteri seçin veya nereye gittiğini yazın.'); return }
+    const party = customers.find((p) => p.id === partyId)
+    if (!party) { setError('Müşteri seçiniz.'); return }
+    const dest = party.name
     if (!occurredAt) { setError('Tarih zorunludur.'); return }
 
     const sale = salePrice.trim() ? parseNonNegativeNumber(salePrice) : null
-    if (salePrice.trim() && sale == null) { setError('Geçerli satış fiyatı giriniz.'); return }
-    if (partyId && sale == null) { setError('Cari alacak için satış fiyatı zorunludur.'); return }
+    if (sale == null) { setError('Geçerli satış fiyatı giriniz.'); return }
 
     const lines: { rollId: string; amount: number }[] = []
     for (const rollId of selectedIds) {
@@ -137,7 +137,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
           fabricName: fabric.name,
           destination: dest,
           occurredAt,
-          partyId: partyId || null,
+          partyId: party.id,
           salePrice: sale,
           lines,
         }),
@@ -243,19 +243,15 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Müşteri / Cari</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Müşteri <span className="text-red-500">*</span></label>
                 <select value={partyId} onChange={(e) => onPartyPick(e.target.value)} className={inputCls} disabled={loading}>
-                  <option value="">Seçiniz (opsiyonel)</option>
+                  <option value="">Seçiniz</option>
                   {customers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+                {customers.length === 0 && (
+                  <p className="text-[11px] text-amber-700 mt-1">Ayarlar → Cariler’den müşteri ekleyin.</p>
+                )}
               </div>
-
-              {!partyId && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Nereye Gitti <span className="text-red-500">*</span></label>
-                  <input type="text" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="ör. Kesimhane" className={inputCls} disabled={loading} />
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -264,7 +260,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Satış fiyatı (₺){partyId ? <span className="text-red-500">*</span> : null}
+                    Satış fiyatı (₺) <span className="text-red-500">*</span>
                   </label>
                   <input type="number" min="0" step="any" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} placeholder="0.00" className={inputCls} disabled={loading} />
                 </div>

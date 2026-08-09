@@ -30,7 +30,6 @@ export async function POST(request: Request) {
   const qty = Number(body.quantity)
   const price = Number(body.unitPrice)
   const occurredAt = body.occurredAt
-  const source = body.source?.trim()
   const warehouse = body.warehouse?.trim() || 'Depo'
   const partyId = body.partyId || null
 
@@ -40,9 +39,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Geçerli fiyat giriniz.' }, { status: 400 })
   }
   if (!occurredAt) return NextResponse.json({ error: 'Tarih zorunlu.' }, { status: 400 })
-  if (!source) return NextResponse.json({ error: 'Nereden geldi zorunlu.' }, { status: 400 })
+  if (!partyId) return NextResponse.json({ error: 'Tedarikçi seçiniz.' }, { status: 400 })
 
   const sb = createServiceClient()
+
+  const { data: party, error: partyErr } = await sb
+    .from('parties')
+    .select('id, name, kind')
+    .eq('id', partyId)
+    .single()
+  if (partyErr || !party) {
+    return NextResponse.json({ error: 'Tedarikçi bulunamadı.' }, { status: 400 })
+  }
+  if (party.kind !== 'tedarikci' && party.kind !== 'her_ikisi') {
+    return NextResponse.json({ error: 'Seçilen cari tedarikçi değil.' }, { status: 400 })
+  }
+  const resolvedSource = party.name
   const lineTotal = qty * price
 
   try {
@@ -111,7 +123,7 @@ export async function POST(request: Request) {
       {
         variant_id: variantId,
         roll_number: generateRollNumber(),
-        lot_number: source,
+        lot_number: resolvedSource,
         quantity: qty,
         unit_price: price,
         location: warehouse,
@@ -129,7 +141,7 @@ export async function POST(request: Request) {
           movement_type: 'GIRIS',
           amount: qty,
           occurred_at: occurredAt,
-          notes: `Giriş | Nereden: ${source} | Depo: ${warehouse}`,
+          notes: `Giriş | Nereden: ${resolvedSource} | Depo: ${warehouse}`,
           party_id: partyId,
           unit_price: price,
           unit_cost: null,

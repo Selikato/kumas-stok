@@ -89,7 +89,9 @@ export default function FabricTypesSettings({ initialTypes }: Props) {
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100">
         <h2 className="text-base font-semibold text-gray-900">Kumaş Tipleri</h2>
-        <p className="text-xs text-gray-400 mt-0.5">Yeni kayıt eklerken seçilecek tipler</p>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Stok listesi değil — Stok girişi → “+ Yeni kumaş” içinde tip olarak seçilir
+        </p>
       </div>
 
       <form onSubmit={handleAdd} className="px-5 py-4 flex gap-2 border-b border-gray-100">
