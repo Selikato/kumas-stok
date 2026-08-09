@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { inputCls } from '@/lib/stockHelpers'
 
@@ -14,6 +15,7 @@ type Props = {
 }
 
 export default function FabricTypesSettings({ initialTypes }: Props) {
+  const router = useRouter()
   const [types, setTypes] = useState(initialTypes)
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -56,6 +58,7 @@ export default function FabricTypesSettings({ initialTypes }: Props) {
     setTypes((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'tr')))
     setName('')
     setMessage(`“${trimmed}” eklendi.`)
+    router.refresh()
   }
 
   async function handleDelete(type: FabricType) {
@@ -83,6 +86,7 @@ export default function FabricTypesSettings({ initialTypes }: Props) {
 
     setTypes((prev) => prev.filter((t) => t.id !== type.id))
     setMessage(`“${type.name}” silindi.`)
+    router.refresh()
   }
 
   return (
@@ -90,7 +94,7 @@ export default function FabricTypesSettings({ initialTypes }: Props) {
       <div className="px-5 py-4 border-b border-gray-100">
         <h2 className="text-base font-semibold text-gray-900">Kumaş Tipleri</h2>
         <p className="text-xs text-gray-400 mt-0.5">
-          Stok listesi değil — Stok girişi → “+ Yeni kumaş oluştur” → Kumaş Tipi
+          Kumaş kartı oluştururken seçilen kategori (Dokuma, Örme…)
         </p>
       </div>
 
