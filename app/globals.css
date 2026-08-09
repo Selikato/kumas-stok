@@ -1,26 +1,104 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ink: #0f1c2e;
+  --ink-soft: #243447;
+  --paper: #f0ebe1;
+  --paper-deep: #e6dfd2;
+  --surface: #faf8f4;
+  --accent: #1a6b5c;
+  --accent-hover: #145548;
+  --line: #d5cdc0;
+  --muted: #6b6458;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --ok: #0f6b4c;
+  --ok-soft: #ecfdf5;
+  --out: #b54708;
+  --out-soft: #fff6ed;
+  --background: var(--paper);
+  --foreground: var(--ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-surface: var(--surface);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-out: var(--out);
+  --color-out-soft: var(--out-soft);
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-instrument);
+  --font-mono: var(--font-ibm-plex-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse 120% 80% at 10% -20%, rgba(26, 107, 92, 0.07), transparent 50%),
+    radial-gradient(ellipse 90% 60% at 100% 0%, rgba(15, 28, 46, 0.05), transparent 45%),
+    linear-gradient(180deg, #f3efe6 0%, var(--paper) 40%, #ebe4d8 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-instrument), ui-serif, Georgia, serif;
+}
+
+.font-mono-ui {
+  font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+}
+
+@keyframes ts-fade-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ts-slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ts-underline {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.ts-modal-enter {
+  animation: ts-fade-in 180ms ease-out;
+}
+
+.ts-toast-enter {
+  animation: ts-slide-up 220ms ease-out;
+}
+
+.ts-nav-active::after {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.2rem;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  transform-origin: left;
+  animation: ts-underline 200ms ease-out;
+}
+
+.linen-pattern {
+  background-image:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
 }

@@ -17,7 +17,7 @@ type Props = {
 
 export default function ToastContainer({ toasts, onRemove }: Props) {
   return (
-    <div className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed bottom-24 right-5 z-[100] flex flex-col gap-2 pointer-events-none md:bottom-5">
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onRemove={onRemove} />
       ))}
@@ -33,25 +33,26 @@ function ToastItem({ toast, onRemove }: { toast: ToastData; onRemove: (id: numbe
 
   return (
     <div
-      className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium border animate-in slide-in-from-bottom-2 fade-in duration-200
-        ${toast.type === 'success'
-          ? 'bg-white border-gray-200 text-gray-900'
-          : 'bg-red-50 border-red-200 text-red-700'
+      className={`ts-toast-enter pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium border shadow-[0_4px_16px_rgba(15,28,46,0.1)] max-w-sm
+        ${
+          toast.type === 'success'
+            ? 'bg-surface border-line text-ink'
+            : 'bg-danger-soft border-danger/25 text-danger'
         }`}
     >
       {toast.type === 'success' ? (
-        <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-ok shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
         </svg>
       ) : (
-        <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-danger shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       )}
-      {toast.message}
+      <span className="min-w-0 break-words">{toast.message}</span>
       <button
         onClick={() => onRemove(toast.id)}
-        className="ml-auto text-gray-400 hover:text-gray-600 transition-colors"
+        className="ml-auto text-muted hover:text-ink transition-colors shrink-0"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

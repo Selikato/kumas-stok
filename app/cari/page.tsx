@@ -1,4 +1,4 @@
-import PageHeader from '@/components/PageHeader'
+import PageShell from '@/components/ui/PageShell'
 import CariClient from '@/components/CariClient'
 import { fetchParties } from '@/lib/queries'
 import { supabase } from '@/lib/supabaseClient'
@@ -21,7 +21,6 @@ async function fetchEntries(): Promise<AccountEntry[]> {
     }))
   }
 
-  // payment_method kolonu yoksa eski select
   const { data, error } = await supabase
     .from('account_entries')
     .select('id, occurred_at, party_id, entry_type, amount, voucher_number, notes, movement_id')
@@ -43,17 +42,11 @@ export default async function CariPage() {
   const [parties, entries] = await Promise.all([fetchParties(), fetchEntries()])
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <PageHeader />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Cari hesaplar</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Tedarikçi borçları, müşteri alacakları, ödeme ve tahsilat
-          </p>
-        </div>
-        <CariClient parties={parties} entries={entries} />
-      </main>
-    </div>
+    <PageShell
+      title="Cari hesaplar"
+      subtitle="Tedarikçi borçları, müşteri alacakları, ödeme ve tahsilat"
+    >
+      <CariClient parties={parties} entries={entries} />
+    </PageShell>
   )
 }

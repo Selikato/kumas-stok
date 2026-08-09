@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import FabricList from '@/components/FabricList'
-import PageHeader from '@/components/PageHeader'
+import PageShell from '@/components/ui/PageShell'
 import PeriodSummary from '@/components/PeriodSummary'
 import { totalValue } from '@/lib/fabricStats'
 import { fetchMovements } from '@/lib/queries'
@@ -87,29 +87,37 @@ export default async function Home() {
   const stockValue = fabrics.reduce((s, f) => s + totalValue(f), 0)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <PageHeader fabrics={fabrics} showActions />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        <PeriodSummary
-          title="Bu ay özeti"
-          girisTutar={summary.girisTutar}
-          cikisMaliyet={summary.cikisMaliyet}
-          cikisSatis={summary.cikisSatis}
-          girisQty={summary.girisQty}
-          cikisQty={summary.cikisQty}
-          movementCount={summary.count}
-          stockValue={stockValue}
-        />
+    <PageShell
+      fabrics={fabrics}
+      showActions
+      title="Stok"
+      subtitle="Bu ayın özeti ve güncel kumaş stokları"
+    >
+      <PeriodSummary
+        title="Bu ay özeti"
+        girisTutar={summary.girisTutar}
+        cikisMaliyet={summary.cikisMaliyet}
+        cikisSatis={summary.cikisSatis}
+        girisQty={summary.girisQty}
+        cikisQty={summary.cikisQty}
+        movementCount={summary.count}
+        stockValue={stockValue}
+      />
 
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium text-gray-900">Stok durumu</h2>
-          <Link href="/hareketler" className="text-xs font-medium text-gray-500 hover:text-gray-800">
-            Tüm hareketler →
-          </Link>
+      <div className="flex items-end justify-between gap-3 pt-1">
+        <div>
+          <h2 className="font-display text-2xl text-ink">Stok durumu</h2>
+          <p className="text-xs text-muted mt-1">Kumaş bazında miktar ve değer</p>
         </div>
+        <Link
+          href="/hareketler"
+          className="text-xs font-medium text-accent hover:text-accent-hover transition-colors"
+        >
+          Tüm hareketler →
+        </Link>
+      </div>
 
-        <FabricList fabrics={fabrics} />
-      </main>
-    </div>
+      <FabricList fabrics={fabrics} />
+    </PageShell>
   )
 }

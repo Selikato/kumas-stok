@@ -235,13 +235,13 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+    <div className="bg-surface rounded-xl border border-line overflow-hidden shadow-[0_1px_2px_rgba(15,28,46,0.04)]">
+      <div className="px-5 py-4 border-b border-line">
+        <h2 className="font-display text-lg text-ink">{title}</h2>
+        <p className="text-xs text-muted mt-0.5">{subtitle}</p>
       </div>
 
-      <form onSubmit={handleAdd} className="px-5 py-4 space-y-2 border-b border-gray-100">
+      <form onSubmit={handleAdd} className="px-5 py-4 space-y-2 border-b border-line">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <input
             type="text"
@@ -283,7 +283,7 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-700 disabled:opacity-50 rounded-lg"
+            className="px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent-hover disabled:opacity-50 rounded-lg"
           >
             Ekle
           </button>
@@ -295,21 +295,21 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
           onFxRateChange={(v) => setDraft((d) => ({ ...d, fxRate: v }))}
           disabled={loading}
         />
-        <p className="text-[11px] text-gray-400">{helpText}</p>
+        <p className="text-[11px] text-muted">{helpText}</p>
       </form>
 
       {(error || message) && (
         <div className="px-5 py-3">
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p className="text-sm text-danger bg-danger-soft border border-danger/20 rounded-lg px-3 py-2">{error}</p>}
           {message && !error && (
-            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{message}</p>
+            <p className="text-sm text-ok bg-ok-soft border border-ok/20 rounded-lg px-3 py-2">{message}</p>
           )}
         </div>
       )}
 
-      <ul className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+      <ul className="divide-y divide-line max-h-80 overflow-y-auto">
         {rows.length === 0 ? (
-          <li className="px-5 py-8 text-sm text-gray-400 text-center">Henüz kayıt yok.</li>
+          <li className="px-5 py-8 text-sm text-muted text-center">Henüz kayıt yok.</li>
         ) : (
           rows.map((p) => {
             const opening = Number(p.opening_balance) || 0
@@ -319,12 +319,12 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
               <li key={p.id} className="px-5 py-3 space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{p.name}</p>
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-sm font-medium text-ink">{p.name}</p>
+                    <p className="text-[11px] text-muted">
                       {p.phone || (p.kind === 'her_ikisi' ? 'Tedarikçi & Müşteri' : '—')}
                     </p>
                     {!editing && (
-                      <p className="text-xs text-gray-600 mt-1">
+                      <p className="text-xs text-ink-soft mt-1">
                         Başlangıç:{' '}
                         <span className="font-medium tabular-nums">
                           {formatted.amount === 0
@@ -340,7 +340,7 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
                         type="button"
                         onClick={() => startEdit(p)}
                         disabled={loading}
-                        className="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                        className="text-xs text-muted hover:text-ink disabled:opacity-50"
                       >
                         Düzenle
                       </button>
@@ -349,14 +349,14 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
                       type="button"
                       onClick={() => handleDelete(p)}
                       disabled={loading}
-                      className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                      className="text-xs text-danger hover:text-danger disabled:opacity-50"
                     >
                       Sil
                     </button>
                   </div>
                 </div>
                 {editing && (
-                  <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <div className="space-y-2 rounded-lg border border-line bg-paper/50 p-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <input
                         type="text"
@@ -408,14 +408,14 @@ export default function PartyKindSettings({ kind, title, subtitle, initialPartie
                         type="button"
                         onClick={() => saveEdit(p)}
                         disabled={loading}
-                        className="text-xs font-medium px-3 py-1.5 bg-gray-900 text-white rounded-md disabled:opacity-50"
+                        className="text-xs font-medium px-3 py-1.5 bg-ink text-surface rounded-md disabled:opacity-50"
                       >
                         Kaydet
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingId(null)}
-                        className="text-xs text-gray-500 px-2"
+                        className="text-xs text-muted px-2"
                       >
                         Vazgeç
                       </button>

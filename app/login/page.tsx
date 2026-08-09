@@ -3,6 +3,9 @@
 import { FormEvent, useState, Suspense } from 'react'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { inputCls } from '@/lib/stockHelpers'
+import Button from '@/components/ui/Button'
+import Field from '@/components/ui/Field'
 
 function LoginForm() {
   const router = useRouter()
@@ -39,68 +42,82 @@ function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+    <form
+      onSubmit={handleSubmit}
+      className="bg-surface/95 border border-line rounded-xl p-6 space-y-4 shadow-[0_1px_2px_rgba(15,28,46,0.06)] ts-modal-enter"
+    >
       <div>
-        <h1 className="text-lg font-semibold text-gray-900">Giriş Yap</h1>
-        <p className="text-xs text-gray-400 mt-1">Trust Stock hesabınızla devam edin</p>
+        <p className="text-xs uppercase tracking-[0.14em] text-muted">Oturum</p>
+        <p className="text-sm text-muted mt-1">Hesabınızla devam edin</p>
       </div>
 
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Kullanıcı adı</label>
+      <Field label="Kullanıcı adı" required>
         <input
           type="text"
           autoComplete="username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          className={inputCls}
           disabled={loading}
           autoFocus
         />
-      </div>
+      </Field>
 
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Şifre</label>
+      <Field label="Şifre" required>
         <input
           type="password"
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          className={inputCls}
           disabled={loading}
         />
-      </div>
+      </Field>
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+        <p className="text-sm text-danger bg-danger-soft border border-danger/20 rounded-lg px-3 py-2">{error}</p>
       )}
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full py-2.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-700 disabled:opacity-50 rounded-lg transition-colors"
-      >
+      <Button type="submit" variant="accent" fullWidth disabled={loading}>
         {loading ? 'Giriş yapılıyor…' : 'Giriş Yap'}
-      </button>
+      </Button>
     </form>
   )
 }
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-5">
-        <div className="flex justify-center">
+    <div className="min-h-screen linen-pattern flex flex-col items-center justify-center px-4 py-10 relative overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-70"
+        style={{
+          background:
+            'radial-gradient(ellipse 70% 50% at 50% 20%, rgba(26,107,92,0.12), transparent 55%)',
+        }}
+      />
+      <div className="relative w-full max-w-sm space-y-8">
+        <div className="text-center space-y-4">
           <Image
             src="/trust-stock-logo-clear.png"
             alt="Trust Stock"
-            width={280}
-            height={64}
-            className="h-14 w-auto"
+            width={360}
+            height={82}
+            className="h-16 sm:h-20 w-auto mx-auto"
             priority
             unoptimized
           />
+          <p className="font-display text-2xl sm:text-3xl text-ink tracking-tight">
+            Trust Stock
+          </p>
+          <p className="text-sm text-muted">Kumaş stok · hareket · cari</p>
         </div>
-        <Suspense fallback={<div className="bg-white rounded-xl border border-gray-200 p-6 text-sm text-gray-400">Yükleniyor…</div>}>
+        <Suspense
+          fallback={
+            <div className="bg-surface border border-line rounded-xl p-6 text-sm text-muted">
+              Yükleniyor…
+            </div>
+          }
+        >
           <LoginForm />
         </Suspense>
       </div>

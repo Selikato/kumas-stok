@@ -17,6 +17,9 @@ import type { MoneyCurrency } from '@/lib/money'
 import { currencySymbol } from '@/lib/money'
 import QuickPartyAdd from '@/components/QuickPartyAdd'
 import CurrencyFields from '@/components/CurrencyFields'
+import ModalFrame from '@/components/ui/ModalFrame'
+import Field from '@/components/ui/Field'
+import Button from '@/components/ui/Button'
 
 type FormData = {
   fabricId: string
@@ -95,9 +98,7 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
           .select('id, name, kind, phone, notes')
           .order('name')
           .then(({ data: d2 }) =>
-            setParties(
-              ((d2 as Party[]) ?? []).map((p) => ({ ...p, opening_balance: 0 }))
-            )
+            setParties(((d2 as Party[]) ?? []).map((p) => ({ ...p, opening_balance: 0 })))
           )
       })
   }, [open, fabrics.length])
@@ -195,117 +196,170 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     }
   }
 
-  if (!open) return null
-
   const priceSym = currencySymbol(form.currency)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !loading && onClose()} />
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Kumaş Girişi</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Tedarikçi · tarih · miktar · fiyat</p>
-          </div>
-          <button onClick={onClose} disabled={loading} className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <ModalFrame
+      open={open}
+      title="Kumaş Girişi"
+      subtitle="Tedarikçi · tarih · miktar · fiyat"
+      onClose={onClose}
+      loading={loading}
+      footer={
+        <div className="flex gap-3">
+          <Button variant="secondary" fullWidth onClick={onClose} disabled={loading}>
+            İptal
+          </Button>
+          <Button variant="accent" fullWidth onClick={() => {
+            const formEl = document.getElementById('stock-in-form') as HTMLFormElement | null
+            formEl?.requestSubmit()
+          }} disabled={loading}>
+            {loading ? 'Kaydediliyor…' : 'Giriş Yap'}
+          </Button>
         </div>
+      }
+    >
+      <form id="stock-in-form" onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Kumaş" required>
+          <select
+            ref={firstInputRef}
+            value={form.fabricId}
+            onChange={(e) => onFabricPick(e.target.value)}
+            className={inputCls}
+            disabled={loading}
+          >
+            <option value="">Seçiniz</option>
+            {fabrics.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+                {f.unit ? ` (${unitLabel(f.unit)})` : ''}
+              </option>
+            ))}
+            <option value="__new__">+ Yeni kumaş oluştur</option>
+          </select>
+        </Field>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          <Field label="Kumaş" required>
-            <select ref={firstInputRef} value={form.fabricId} onChange={(e) => onFabricPick(e.target.value)} className={inputCls} disabled={loading}>
-              <option value="">Seçiniz</option>
-              {fabrics.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}{f.unit ? ` (${unitLabel(f.unit)})` : ''}</option>
-              ))}
-              <option value="__new__">+ Yeni kumaş oluştur</option>
-            </select>
-          </Field>
-
-          {(isNew || form.fabricId === '__new__') && (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Kumaş Adı" required>
-                <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="ör. Pamuk Poplin" className={inputCls} disabled={loading} />
-              </Field>
-              <Field label="Birim" required>
-                <select value={form.unit} onChange={(e) => set('unit', e.target.value)} className={inputCls} disabled={loading}>
-                  <option value="">Seçiniz</option>
-                  <option value="metre">Metre</option>
-                  <option value="kg">Kg</option>
-                </select>
-              </Field>
-            </div>
-          )}
-
-          {pickingExisting && selectedFabric && (
-            <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
-              Birim: <span className="font-medium text-gray-800">{unitLabel(selectedFabric.unit) || '—'}</span>
-            </p>
-          )}
-
-          <Field label="Tedarikçi" required>
-            <select value={form.partyId} onChange={(e) => set('partyId', e.target.value)} className={inputCls} disabled={loading}>
-              <option value="">Seçiniz</option>
-              {suppliers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <div className="mt-1">
-              <QuickPartyAdd
-                kind="tedarikci"
+        {(isNew || form.fabricId === '__new__') && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Kumaş Adı" required>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => set('name', e.target.value)}
+                placeholder="ör. Pamuk Poplin"
+                className={inputCls}
                 disabled={loading}
-                onCreated={(party) => {
-                  setParties((prev) => [...prev, { ...party, opening_balance: party.opening_balance ?? 0 }].sort((a, b) => a.name.localeCompare(b.name, 'tr')))
-                  set('partyId', party.id)
-                }}
               />
-            </div>
-          </Field>
+            </Field>
+            <Field label="Birim" required>
+              <select
+                value={form.unit}
+                onChange={(e) => set('unit', e.target.value)}
+                className={inputCls}
+                disabled={loading}
+              >
+                <option value="">Seçiniz</option>
+                <option value="metre">Metre</option>
+                <option value="kg">Kg</option>
+              </select>
+            </Field>
+          </div>
+        )}
 
-          <Field label="Tarih" required>
-            <input type="date" value={form.occurred_at} onChange={(e) => set('occurred_at', e.target.value)} className={inputCls} disabled={loading} />
-          </Field>
+        {pickingExisting && selectedFabric && (
+          <p className="text-xs text-muted bg-paper/60 border border-line rounded-lg px-3 py-2">
+            Birim: <span className="font-medium text-ink">{unitLabel(selectedFabric.unit) || '—'}</span>
+          </p>
+        )}
 
-          <CurrencyFields
-            currency={form.currency}
-            fxRate={form.fxRate}
-            onCurrencyChange={(c) => setForm((prev) => ({ ...prev, currency: c }))}
-            onFxRateChange={(v) => set('fxRate', v)}
+        <Field label="Tedarikçi" required>
+          <select
+            value={form.partyId}
+            onChange={(e) => set('partyId', e.target.value)}
+            className={inputCls}
+            disabled={loading}
+          >
+            <option value="">Seçiniz</option>
+            {suppliers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <div className="mt-1">
+            <QuickPartyAdd
+              kind="tedarikci"
+              disabled={loading}
+              onCreated={(party) => {
+                setParties((prev) =>
+                  [...prev, { ...party, opening_balance: party.opening_balance ?? 0 }].sort((a, b) =>
+                    a.name.localeCompare(b.name, 'tr')
+                  )
+                )
+                set('partyId', party.id)
+              }}
+            />
+          </div>
+        </Field>
+
+        <Field label="Tarih" required>
+          <input
+            type="date"
+            value={form.occurred_at}
+            onChange={(e) => set('occurred_at', e.target.value)}
+            className={inputCls}
             disabled={loading}
           />
+        </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={`Miktar${pickingExisting && selectedFabric?.unit ? ` (${unitLabel(selectedFabric.unit)})` : form.unit ? ` (${unitLabel(form.unit)})` : ''}`} required>
-              <input type="number" min="0.01" step="any" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="0" className={inputCls} disabled={loading} />
-            </Field>
-            <Field label={`Alış fiyatı (${priceSym})`} required>
-              <input type="number" min="0" step="any" value={form.unit_price} onChange={(e) => set('unit_price', e.target.value)} placeholder="0.00" className={inputCls} disabled={loading} />
-            </Field>
-          </div>
+        <CurrencyFields
+          currency={form.currency}
+          fxRate={form.fxRate}
+          onCurrencyChange={(c) => setForm((prev) => ({ ...prev, currency: c }))}
+          onFxRateChange={(v) => set('fxRate', v)}
+          disabled={loading}
+        />
 
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            label={`Miktar${
+              pickingExisting && selectedFabric?.unit
+                ? ` (${unitLabel(selectedFabric.unit)})`
+                : form.unit
+                  ? ` (${unitLabel(form.unit)})`
+                  : ''
+            }`}
+            required
+          >
+            <input
+              type="number"
+              min="0.01"
+              step="any"
+              value={form.quantity}
+              onChange={(e) => set('quantity', e.target.value)}
+              placeholder="0"
+              className={inputCls}
+              disabled={loading}
+            />
+          </Field>
+          <Field label={`Alış fiyatı (${priceSym})`} required>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={form.unit_price}
+              onChange={(e) => set('unit_price', e.target.value)}
+              placeholder="0.00"
+              className={inputCls}
+              disabled={loading}
+            />
+          </Field>
+        </div>
 
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} disabled={loading} className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50">İptal</button>
-            <button type="submit" disabled={loading} className="flex-1 py-2.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-700 disabled:opacity-50 rounded-lg">
-              {loading ? 'Kaydediliyor…' : 'Giriş Yap'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      {children}
-    </div>
+        {error && (
+          <p className="text-sm text-danger bg-danger-soft border border-danger/20 rounded-lg px-3 py-2">{error}</p>
+        )}
+      </form>
+    </ModalFrame>
   )
 }

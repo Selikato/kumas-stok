@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import type { Party, PartyKind } from '@/lib/cari'
 import { inputCls } from '@/lib/stockHelpers'
+import Button from '@/components/ui/Button'
 
 type Props = {
   kind: Extract<PartyKind, 'tedarikci' | 'musteri'>
@@ -40,9 +41,11 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
         .select('id, name, kind, phone, notes')
         .single()
       if (fb.error) {
-        setError(fb.error.message.includes('unique') || fb.error.code === '23505'
-          ? 'Bu isimde cari zaten var.'
-          : fb.error.message)
+        setError(
+          fb.error.message.includes('unique') || fb.error.code === '23505'
+            ? 'Bu isimde cari zaten var.'
+            : fb.error.message
+        )
         return
       }
       onCreated({ ...(fb.data as Party), opening_balance: 0 })
@@ -52,9 +55,11 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
     }
 
     if (insertErr) {
-      setError(insertErr.message.includes('unique') || insertErr.code === '23505'
-        ? 'Bu isimde cari zaten var.'
-        : insertErr.message)
+      setError(
+        insertErr.message.includes('unique') || insertErr.code === '23505'
+          ? 'Bu isimde cari zaten var.'
+          : insertErr.message
+      )
       return
     }
 
@@ -69,7 +74,7 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
         type="button"
         disabled={disabled}
         onClick={() => setOpen(true)}
-        className="text-[11px] text-teal-700 hover:text-teal-900 font-medium disabled:opacity-50"
+        className="text-[11px] text-accent hover:text-accent-hover font-medium disabled:opacity-50"
       >
         + Yeni {label}
       </button>
@@ -77,7 +82,7 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
   }
 
   return (
-    <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5 space-y-2">
+    <div className="mt-2 rounded-lg border border-line bg-paper/50 p-2.5 space-y-2">
       <form onSubmit={handleAdd} className="flex gap-2">
         <input
           type="text"
@@ -88,23 +93,23 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
           disabled={loading || disabled}
           autoFocus
         />
-        <button
-          type="submit"
-          disabled={loading || disabled}
-          className="shrink-0 px-3 py-2 text-xs font-medium text-white bg-gray-900 hover:bg-gray-700 rounded-lg disabled:opacity-50"
-        >
+        <Button type="submit" variant="primary" disabled={loading || disabled} className="!py-2 !text-xs shrink-0">
           Ekle
-        </button>
+        </Button>
         <button
           type="button"
           disabled={loading}
-          onClick={() => { setOpen(false); setError(null); setName('') }}
-          className="shrink-0 px-2 py-2 text-xs text-gray-500 hover:text-gray-800"
+          onClick={() => {
+            setOpen(false)
+            setError(null)
+            setName('')
+          }}
+          className="shrink-0 px-2 py-2 text-xs text-muted hover:text-ink"
         >
           Vazgeç
         </button>
       </form>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   )
 }

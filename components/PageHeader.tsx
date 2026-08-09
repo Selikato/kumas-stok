@@ -8,6 +8,7 @@ import type { Fabric } from '@/app/page'
 import AddFabricModal from './AddFabricModal'
 import StockOutModal from './StockOutModal'
 import ToastContainer, { type ToastData } from './Toast'
+import Button from '@/components/ui/Button'
 
 type Props = {
   fabrics?: Fabric[]
@@ -55,13 +56,13 @@ export default function PageHeader({ fabrics = [], showActions = false }: Props)
 
   return (
     <>
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <header className="sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-5 min-w-0">
+            <div className="flex items-center gap-6 min-w-0">
               <Link
                 href="/"
-                className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 rounded-md"
+                className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-md"
               >
                 <Image
                   src="/trust-stock-logo-clear.png"
@@ -74,67 +75,86 @@ export default function PageHeader({ fabrics = [], showActions = false }: Props)
                 />
               </Link>
               <nav className="hidden md:flex items-center gap-0.5 text-sm">
-                {NAV.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`px-2.5 py-1.5 rounded-md transition-colors ${
-                      navActive(item.href)
-                        ? 'bg-gray-100 text-gray-900 font-medium'
-                        : 'text-gray-500 hover:text-gray-800'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
+                {NAV.map((item) => {
+                  const active = navActive(item.href)
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`relative px-3 py-2 rounded-md transition-colors ${
+                        active
+                          ? 'text-ink font-medium ts-nav-active'
+                          : 'text-muted hover:text-ink'
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  )
+                })}
               </nav>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
               {showActions && (
-                <>
-                  <button
-                    onClick={() => setStockInOpen(true)}
-                    className="inline-flex items-center bg-gray-900 hover:bg-gray-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
-                  >
+                <div className="hidden md:flex items-center gap-2">
+                  <Button variant="accent" onClick={() => setStockInOpen(true)}>
                     Stok girişi
-                  </button>
-                  <button
-                    onClick={() => setStockOutOpen(true)}
-                    className="inline-flex items-center bg-white hover:bg-gray-50 text-gray-900 text-sm font-medium px-3 py-2 rounded-lg border border-gray-200 transition-colors"
-                  >
+                  </Button>
+                  <Button variant="secondary" onClick={() => setStockOutOpen(true)}>
                     Stok çıkışı
-                  </button>
-                </>
+                  </Button>
+                </div>
               )}
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="text-sm text-gray-500 hover:text-gray-800 px-2 py-2 disabled:opacity-50"
+                className="text-sm text-muted hover:text-ink px-2 py-2 disabled:opacity-50 transition-colors"
                 title="Oturumu kapat"
               >
-                {loggingOut ? '…' : 'Oturumu kapat'}
+                {loggingOut ? '…' : <span className="hidden sm:inline">Çıkış</span>}
+                <span className="sm:hidden" aria-label="Oturumu kapat">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                      d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                  </svg>
+                </span>
               </button>
             </div>
           </div>
 
           <nav className="md:hidden flex gap-1 pb-3 overflow-x-auto text-sm -mx-1 px-1">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`px-2.5 py-1.5 rounded-md whitespace-nowrap transition-colors ${
-                  navActive(item.href)
-                    ? 'bg-gray-100 text-gray-900 font-medium'
-                    : 'text-gray-500'
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {NAV.map((item) => {
+              const active = navActive(item.href)
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`px-3 py-2 rounded-lg whitespace-nowrap transition-colors ${
+                    active
+                      ? 'bg-ink text-surface font-medium'
+                      : 'text-muted hover:bg-paper-deep'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              )
+            })}
           </nav>
         </div>
       </header>
+
+      {showActions && (
+        <div className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-line bg-surface/95 backdrop-blur-md p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="grid grid-cols-2 gap-2 max-w-7xl mx-auto">
+            <Button variant="accent" fullWidth onClick={() => setStockInOpen(true)}>
+              Giriş
+            </Button>
+            <Button variant="danger" fullWidth onClick={() => setStockOutOpen(true)}>
+              Çıkış
+            </Button>
+          </div>
+        </div>
+      )}
 
       {showActions && (
         <>

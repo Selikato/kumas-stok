@@ -146,17 +146,17 @@ export default function FabricsSettings({ initialFabrics }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="text-base font-semibold text-gray-900">Kumaşlar</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
+    <div className="bg-surface rounded-xl border border-line overflow-hidden shadow-[0_1px_2px_rgba(15,28,46,0.04)]">
+      <div className="px-5 py-4 border-b border-line">
+        <h2 className="font-display text-lg text-ink">Kumaşlar</h2>
+        <p className="text-xs text-muted mt-0.5">
           Stok giriş/çıkış listesindeki kumaş kartları
         </p>
       </div>
 
       <form
         onSubmit={handleAdd}
-        className="px-5 py-4 grid grid-cols-1 sm:grid-cols-3 gap-2 border-b border-gray-100"
+        className="px-5 py-4 grid grid-cols-1 sm:grid-cols-3 gap-2 border-b border-line"
       >
         <input
           type="text"
@@ -178,7 +178,7 @@ export default function FabricsSettings({ initialFabrics }: Props) {
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-700 disabled:opacity-50 rounded-lg"
+          className="px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent-hover disabled:opacity-50 rounded-lg"
         >
           Ekle
         </button>
@@ -186,23 +186,23 @@ export default function FabricsSettings({ initialFabrics }: Props) {
 
       {(error || message) && (
         <div className="px-5 py-3">
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p className="text-sm text-danger bg-danger-soft border border-danger/20 rounded-lg px-3 py-2">{error}</p>}
           {message && !error && (
-            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{message}</p>
+            <p className="text-sm text-ok bg-ok-soft border border-ok/20 rounded-lg px-3 py-2">{message}</p>
           )}
         </div>
       )}
 
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-line">
         {fabrics.length === 0 ? (
-          <li className="px-5 py-8 text-sm text-gray-400 text-center">Henüz kumaş yok.</li>
+          <li className="px-5 py-8 text-sm text-muted text-center">Henüz kumaş yok.</li>
         ) : (
           fabrics.map((f) => (
             <li key={f.id} className="px-5 py-3 space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{f.name}</p>
-                  <p className="text-[11px] text-gray-400">{unitLabel(f.unit) || '—'}</p>
+                  <p className="text-sm font-medium text-ink">{f.name}</p>
+                  <p className="text-[11px] text-muted">{unitLabel(f.unit) || '—'}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {editingId !== f.id && (
@@ -210,7 +210,7 @@ export default function FabricsSettings({ initialFabrics }: Props) {
                       type="button"
                       onClick={() => startEdit(f)}
                       disabled={loading}
-                      className="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                      className="text-xs text-muted hover:text-ink disabled:opacity-50"
                     >
                       Düzenle
                     </button>
@@ -219,14 +219,14 @@ export default function FabricsSettings({ initialFabrics }: Props) {
                     type="button"
                     onClick={() => handleDelete(f)}
                     disabled={loading}
-                    className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                    className="text-xs text-danger hover:text-danger disabled:opacity-50"
                   >
                     Sil
                   </button>
                 </div>
               </div>
               {editingId === f.id && (
-                <div className="flex flex-wrap gap-2 items-center rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+                <div className="flex flex-wrap gap-2 items-center rounded-lg border border-line bg-paper/50 p-2.5">
                   <input
                     type="text"
                     value={editName}
@@ -247,11 +247,11 @@ export default function FabricsSettings({ initialFabrics }: Props) {
                     type="button"
                     onClick={() => saveEdit(f)}
                     disabled={loading}
-                    className="text-xs font-medium px-3 py-1.5 bg-gray-900 text-white rounded-md disabled:opacity-50"
+                    className="text-xs font-medium px-3 py-1.5 bg-ink text-surface rounded-md disabled:opacity-50"
                   >
                     Kaydet
                   </button>
-                  <button type="button" onClick={() => setEditingId(null)} className="text-xs text-gray-500">
+                  <button type="button" onClick={() => setEditingId(null)} className="text-xs text-muted">
                     Vazgeç
                   </button>
                 </div>

@@ -21,4 +21,4 @@ export async function getOrCreateVariant(fabricId: string): Promise<string> {
 }
 
 export const inputCls =
-  'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition'
+  'w-full px-3 py-2.5 text-sm bg-surface border border-line rounded-lg text-ink placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-accent/35 focus:border-accent transition'

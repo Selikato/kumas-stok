@@ -12,6 +12,9 @@ import type { MoneyCurrency } from '@/lib/money'
 import { currencySymbol } from '@/lib/money'
 import QuickPartyAdd from '@/components/QuickPartyAdd'
 import CurrencyFields from '@/components/CurrencyFields'
+import ModalFrame from '@/components/ui/ModalFrame'
+import Field from '@/components/ui/Field'
+import Button from '@/components/ui/Button'
 
 type Props = {
   open: boolean
@@ -54,7 +57,6 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
             .flatMap((v) => v.rolls.map((r) => ({ ...r, variantName: v.color_name })))
             .filter((r) => (r.quantity ?? 0) > 0)
             .sort((a, b) => {
-              // FIFO: eski giriş tarihi önce
               const da = a.received_at || ''
               const db = b.received_at || ''
               if (da && db && da !== db) return da.localeCompare(db)
@@ -194,136 +196,178 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
     }
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !loading && onClose()} />
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Kumaş Çıkışı</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Stoklar giriş tarihine göre (eski önce)</p>
-          </div>
-          <button onClick={onClose} disabled={loading} className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <ModalFrame
+      open={open}
+      title="Kumaş Çıkışı"
+      subtitle="Stoklar giriş tarihine göre (eski önce)"
+      onClose={onClose}
+      loading={loading}
+      maxWidth="lg"
+      footer={
+        <div className="flex gap-3">
+          <Button variant="secondary" fullWidth onClick={onClose} disabled={loading}>
+            İptal
+          </Button>
+          <Button
+            variant="danger"
+            fullWidth
+            disabled={loading || !fabric || selectedIds.length === 0}
+            onClick={() => {
+              const formEl = document.getElementById('stock-out-form') as HTMLFormElement | null
+              formEl?.requestSubmit()
+            }}
+          >
+            {loading ? 'İşleniyor…' : 'Çıkış Yap'}
+          </Button>
         </div>
+      }
+    >
+      <form id="stock-out-form" onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Kumaş" required>
+          {stockedFabrics.length === 0 ? (
+            <p className="text-sm text-muted py-2">Stoklu kumaş bulunmuyor.</p>
+          ) : (
+            <select
+              value={fabricId}
+              onChange={(e) => setFabricId(e.target.value)}
+              className={inputCls}
+              disabled={loading}
+              autoFocus
+            >
+              <option value="">Seçiniz</option>
+              {stockedFabrics.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                  {f.unit ? ` (${unitLabel(f.unit)})` : ''} — {totalQty(f)}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Kumaş <span className="text-red-500">*</span></label>
-            {stockedFabrics.length === 0 ? (
-              <p className="text-sm text-gray-400 py-2">Stoklu kumaş bulunmuyor.</p>
-            ) : (
-              <select value={fabricId} onChange={(e) => setFabricId(e.target.value)} className={inputCls} disabled={loading} autoFocus>
+        {fabric && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-2">
+                Stok kayıtları <span className="text-danger">*</span>
+                <span className="text-muted/70 font-normal ml-1">tarihe göre · maliyet = alış</span>
+              </label>
+              <div className="space-y-2 max-h-48 overflow-y-auto border border-line rounded-lg p-2 bg-paper/30">
+                {allRolls.map((r) => {
+                  const isOn = !!selected[r.id]
+                  return (
+                    <div
+                      key={r.id}
+                      className={`rounded-lg border px-3 py-2 ${
+                        isOn ? 'border-ink bg-surface' : 'border-line bg-surface/70'
+                      }`}
+                    >
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isOn}
+                          onChange={() => toggleRoll(r.id)}
+                          disabled={loading}
+                          className="mt-1 accent-accent"
+                        />
+                        <span className="flex-1 text-xs text-ink-soft">
+                          {r.roll_number && (
+                            <span className="font-mono-ui text-muted block">{r.roll_number}</span>
+                          )}
+                          <span>
+                            {r.lot_number ? `${r.lot_number}` : 'Kayıt'}
+                            {` · ${r.quantity}${unit ? ` ${unit}` : ''}`}
+                            {r.unit_price != null ? ` · maliyet ₺${fmt(r.unit_price)}` : ''}
+                            {r.received_at ? ` · ${formatTRDate(r.received_at)}` : ''}
+                          </span>
+                        </span>
+                      </label>
+                      {isOn && (
+                        <div className="mt-2 ml-6">
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="any"
+                            max={r.quantity}
+                            value={amounts[r.id] ?? ''}
+                            onChange={(e) => setAmounts((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                            className={inputCls}
+                            disabled={loading}
+                            placeholder="Çıkış miktarı"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <Field label="Müşteri" required>
+              <select
+                value={partyId}
+                onChange={(e) => onPartyPick(e.target.value)}
+                className={inputCls}
+                disabled={loading}
+              >
                 <option value="">Seçiniz</option>
-                {stockedFabrics.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}{f.unit ? ` (${unitLabel(f.unit)})` : ''} — {totalQty(f)}
+                {customers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
                   </option>
                 ))}
               </select>
-            )}
-          </div>
-
-          {fabric && (
-            <>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-2">
-                  Stok kayıtları <span className="text-red-500">*</span>
-                  <span className="text-gray-400 font-normal ml-1">tarihe göre · maliyet = alış</span>
-                </label>
-                <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-2">
-                  {allRolls.map((r) => {
-                    const isOn = !!selected[r.id]
-                    return (
-                      <div key={r.id} className={`rounded-lg border px-3 py-2 ${isOn ? 'border-gray-900 bg-gray-50' : 'border-gray-200'}`}>
-                        <label className="flex items-start gap-2 cursor-pointer">
-                          <input type="checkbox" checked={isOn} onChange={() => toggleRoll(r.id)} disabled={loading} className="mt-1" />
-                          <span className="flex-1 text-xs text-gray-700">
-                            {r.roll_number && <span className="font-mono text-gray-500 block">{r.roll_number}</span>}
-                            <span>
-                              {r.lot_number ? `${r.lot_number}` : 'Kayıt'}
-                              {` · ${r.quantity}${unit ? ` ${unit}` : ''}`}
-                              {r.unit_price != null ? ` · maliyet ₺${fmt(r.unit_price)}` : ''}
-                              {r.received_at ? ` · ${formatTRDate(r.received_at)}` : ''}
-                            </span>
-                          </span>
-                        </label>
-                        {isOn && (
-                          <div className="mt-2 ml-6">
-                            <input
-                              type="number" min="0.01" step="any" max={r.quantity}
-                              value={amounts[r.id] ?? ''}
-                              onChange={(e) => setAmounts((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                              className={inputCls} disabled={loading} placeholder="Çıkış miktarı"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+              <div className="mt-1">
+                <QuickPartyAdd
+                  kind="musteri"
+                  disabled={loading}
+                  onCreated={(party) => {
+                    setParties((prev) => [...prev, party].sort((a, b) => a.name.localeCompare(b.name, 'tr')))
+                    setPartyId(party.id)
+                    setDestination(party.name)
+                  }}
+                />
               </div>
+            </Field>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Müşteri <span className="text-red-500">*</span></label>
-                <select value={partyId} onChange={(e) => onPartyPick(e.target.value)} className={inputCls} disabled={loading}>
-                  <option value="">Seçiniz</option>
-                  {customers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <div className="mt-1">
-                  <QuickPartyAdd
-                    kind="musteri"
-                    disabled={loading}
-                    onCreated={(party) => {
-                      setParties((prev) => [...prev, party].sort((a, b) => a.name.localeCompare(b.name, 'tr')))
-                      setPartyId(party.id)
-                      setDestination(party.name)
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Tarih <span className="text-red-500">*</span></label>
-                <input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} className={inputCls} disabled={loading} />
-              </div>
-
-              <CurrencyFields
-                currency={currency}
-                fxRate={fxRate}
-                onCurrencyChange={setCurrency}
-                onFxRateChange={setFxRate}
+            <Field label="Tarih" required>
+              <input
+                type="date"
+                value={occurredAt}
+                onChange={(e) => setOccurredAt(e.target.value)}
+                className={inputCls}
                 disabled={loading}
               />
+            </Field>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Satış fiyatı ({currencySymbol(currency)}) <span className="text-red-500">*</span>
-                </label>
-                <input type="number" min="0" step="any" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} placeholder="0.00" className={inputCls} disabled={loading} />
-              </div>
-            </>
-          )}
+            <CurrencyFields
+              currency={currency}
+              fxRate={fxRate}
+              onCurrencyChange={setCurrency}
+              onFxRateChange={setFxRate}
+              disabled={loading}
+            />
 
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+            <Field label={`Satış fiyatı (${currencySymbol(currency)})`} required>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={salePrice}
+                onChange={(e) => setSalePrice(e.target.value)}
+                placeholder="0.00"
+                className={inputCls}
+                disabled={loading}
+              />
+            </Field>
+          </>
+        )}
 
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} disabled={loading} className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50">İptal</button>
-            <button
-              type="submit"
-              disabled={loading || !fabric || selectedIds.length === 0}
-              className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg"
-            >
-              {loading ? 'İşleniyor…' : 'Çıkış Yap'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {error && (
+          <p className="text-sm text-danger bg-danger-soft border border-danger/20 rounded-lg px-3 py-2">{error}</p>
+        )}
+      </form>
+    </ModalFrame>
   )
 }

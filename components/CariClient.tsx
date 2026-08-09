@@ -21,6 +21,9 @@ import { fmt, formatTRDate, todayISODate, parsePositiveNumber } from '@/lib/help
 import { inputCls } from '@/lib/stockHelpers'
 import { fxNote, toTry, currencySymbol, type MoneyCurrency } from '@/lib/money'
 import CurrencyFields from '@/components/CurrencyFields'
+import Button from '@/components/ui/Button'
+import Field from '@/components/ui/Field'
+import { PanelHeader } from '@/components/ui/Panel'
 
 type Props = {
   parties: Party[]
@@ -155,9 +158,7 @@ export default function CariClient({ parties: initialParties, entries: initialEn
       type="button"
       onClick={() => setListFilter(id)}
       className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors ${
-        listFilter === id
-          ? 'bg-gray-900 text-white'
-          : 'text-gray-600 hover:bg-gray-100'
+        listFilter === id ? 'bg-ink text-surface' : 'text-muted hover:bg-paper-deep'
       }`}
     >
       {label}
@@ -166,28 +167,30 @@ export default function CariClient({ parties: initialParties, entries: initialEn
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-      <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+      <div className="lg:col-span-2 bg-surface rounded-xl border border-line overflow-hidden shadow-[0_1px_2px_rgba(15,28,46,0.04)]">
+        <div className="px-4 py-3 border-b border-line space-y-2">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900">Cariler</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Alfabetik · Alacak (+), borç (−)</p>
+            <h2 className="font-display text-lg text-ink">Cariler</h2>
+            <p className="text-xs text-muted mt-0.5">Alfabetik · Alacak (+), borç (−)</p>
           </div>
-          <div className="flex gap-1 bg-gray-50 p-1 rounded-lg">
-            {filterBtn('all', 'Tümü')}
-            {filterBtn('alacakli', 'Alacaklı')}
-            {filterBtn('borclu', 'Borçlu')}
-          </div>
+          <div className="flex gap-1 bg-paper/70 p-1 rounded-lg">{filterBtn('all', 'Tümü')}{filterBtn('alacakli', 'Alacaklı')}{filterBtn('borclu', 'Borçlu')}</div>
         </div>
         {sortedFiltered.length === 0 ? (
-          <p className="text-sm text-gray-400 p-6 text-center">
+          <p className="text-sm text-muted p-6 text-center">
             {parties.length === 0 ? (
-              <>Henüz cari yok. <a href="/ayarlar" className="text-gray-700 underline">Ayarlar</a>’dan ekleyin.</>
+              <>
+                Henüz cari yok.{' '}
+                <a href="/ayarlar" className="text-accent underline">
+                  Ayarlar
+                </a>
+                ’dan ekleyin.
+              </>
             ) : (
               'Bu filtrede cari yok.'
             )}
           </p>
         ) : (
-          <ul className="divide-y divide-gray-100 max-h-[28rem] overflow-y-auto">
+          <ul className="divide-y divide-line max-h-[28rem] overflow-y-auto">
             {sortedFiltered.map(({ party: p, bal }) => {
               const formatted = formatBalance(bal)
               const active = p.id === selectedId
@@ -198,34 +201,32 @@ export default function CariClient({ parties: initialParties, entries: initialEn
                     type="button"
                     onClick={() => setSelectedId(p.id)}
                     className={`w-full text-left px-4 py-3 transition-colors ${
-                      active ? 'bg-gray-50' : 'hover:bg-gray-50'
-                    } ${reverse ? 'border-l-2 border-amber-500' : ''}`}
+                      active ? 'bg-paper/70' : 'hover:bg-paper/40'
+                    } ${reverse ? 'border-l-2 border-out' : ''}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">
+                        <p className="text-sm font-medium text-ink truncate">{p.name}</p>
+                        <p className="text-[11px] text-muted mt-0.5">
                           {partyKindLabel(p.kind as PartyKind)}
-                          {reverse && (
-                            <span className="ml-1.5 text-amber-700 font-medium">· Ters bakiye</span>
-                          )}
+                          {reverse && <span className="ml-1.5 text-out font-medium">· Ters bakiye</span>}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
                         <p
                           className={`text-sm font-semibold tabular-nums ${
                             reverse
-                              ? 'text-amber-700'
+                              ? 'text-out'
                               : bal > 0
-                                ? 'text-emerald-700'
+                                ? 'text-ok'
                                 : bal < 0
-                                  ? 'text-red-600'
-                                  : 'text-gray-400'
+                                  ? 'text-danger'
+                                  : 'text-muted'
                           }`}
                         >
                           {formatted.amount === 0 ? '—' : `₺${fmt(formatted.amount)}`}
                         </p>
-                        <p className={`text-[10px] ${reverse ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
+                        <p className={`text-[10px] ${reverse ? 'text-out font-medium' : 'text-muted'}`}>
                           {formatted.label}
                         </p>
                       </div>
@@ -241,139 +242,170 @@ export default function CariClient({ parties: initialParties, entries: initialEn
       <div className="lg:col-span-3 space-y-4">
         {selected ? (
           <>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <div className="flex items-start justify-between gap-3 mb-4">
-                <div>
-                  <h2 className="text-base font-semibold text-gray-900">{selected.name}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{partyKindLabel(selected.kind)}</p>
-                </div>
-                {(() => {
-                  const bal = balances.get(selected.id) ?? 0
-                  const b = formatBalance(bal)
-                  const reverse = isReverseBalance(selected.kind, bal)
-                  const opening = formatBalance(Number(selected.opening_balance) || 0)
-                  return (
-                    <div className="text-right">
-                      <p className={`text-xs ${reverse ? 'text-amber-700 font-medium' : 'text-gray-400'}`}>
-                        {b.label}{reverse ? ' · ters' : ''}
-                      </p>
-                      <p className={`text-xl font-semibold tabular-nums ${reverse ? 'text-amber-700' : 'text-gray-900'}`}>
-                        {b.amount === 0 ? '₺0' : `₺${fmt(b.amount)}`}
-                      </p>
-                      {opening.amount > 0 && (
-                        <p className="text-[11px] text-gray-400 mt-1">
-                          Başlangıç: ₺{fmt(opening.amount)} {opening.label}
-                        </p>
-                      )}
-                    </div>
-                  )
-                })()}
-              </div>
-
-              <form onSubmit={handlePayment} className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-gray-100 pt-4">
-                <div className="sm:col-span-2">
-                  <p className="text-xs text-gray-500 mb-2">
-                    Kumaş dışı borç/alacak için <span className="font-medium text-gray-700">Borç ekle</span> /{' '}
-                    <span className="font-medium text-gray-700">Alacak ekle</span> seçin (ör. boyahane).
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">İşlem</label>
-                  <select value={entryType} onChange={(e) => setEntryType(e.target.value as AccountEntryType)} className={inputCls} disabled={loading}>
-                    <option value="odeme">Ödeme (borç azalt)</option>
-                    <option value="tahsilat">Tahsilat (alacak azalt)</option>
-                    <option value="borc">Borç ekle (manuel)</option>
-                    <option value="alacak">Alacak ekle (manuel)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Tutar ({currencySymbol(currency)})</label>
-                  <input type="number" min="0.01" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputCls} disabled={loading} />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Tarih</label>
-                  <input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} className={inputCls} disabled={loading} />
-                </div>
-                <div className="sm:col-span-2">
-                  <CurrencyFields
-                    currency={currency}
-                    fxRate={fxRate}
-                    onCurrencyChange={setCurrency}
-                    onFxRateChange={setFxRate}
-                    disabled={loading}
-                  />
-                </div>
-                {showPaymentMethod ? (
+            <div className="bg-surface rounded-xl border border-line shadow-[0_1px_2px_rgba(15,28,46,0.04)] sticky top-[4.5rem] z-[5]">
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3 mb-4">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Ödeme şekli</label>
+                    <h2 className="font-display text-2xl text-ink leading-tight">{selected.name}</h2>
+                    <p className="text-xs text-muted mt-1">{partyKindLabel(selected.kind)}</p>
+                  </div>
+                  {(() => {
+                    const bal = balances.get(selected.id) ?? 0
+                    const b = formatBalance(bal)
+                    const reverse = isReverseBalance(selected.kind, bal)
+                    const opening = formatBalance(Number(selected.opening_balance) || 0)
+                    return (
+                      <div className="text-right">
+                        <p className={`text-xs ${reverse ? 'text-out font-medium' : 'text-muted'}`}>
+                          {b.label}
+                          {reverse ? ' · ters' : ''}
+                        </p>
+                        <p
+                          className={`font-display text-3xl tabular-nums tracking-tight ${
+                            reverse ? 'text-out' : 'text-ink'
+                          }`}
+                        >
+                          {b.amount === 0 ? '₺0' : `₺${fmt(b.amount)}`}
+                        </p>
+                        {opening.amount > 0 && (
+                          <p className="text-[11px] text-muted mt-1">
+                            Başlangıç: ₺{fmt(opening.amount)} {opening.label}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                <form
+                  onSubmit={handlePayment}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-line pt-4"
+                >
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-muted mb-2">
+                      Kumaş dışı borç/alacak için{' '}
+                      <span className="font-medium text-ink">Borç ekle</span> /{' '}
+                      <span className="font-medium text-ink">Alacak ekle</span> seçin (ör. boyahane).
+                    </p>
+                  </div>
+                  <Field label="İşlem">
                     <select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                      value={entryType}
+                      onChange={(e) => setEntryType(e.target.value as AccountEntryType)}
                       className={inputCls}
                       disabled={loading}
                     >
-                      {PAYMENT_METHODS.map((m) => (
-                        <option key={m.value} value={m.value}>{m.label}</option>
-                      ))}
+                      <option value="odeme">Ödeme (borç azalt)</option>
+                      <option value="tahsilat">Tahsilat (alacak azalt)</option>
+                      <option value="borc">Borç ekle (manuel)</option>
+                      <option value="alacak">Alacak ekle (manuel)</option>
                     </select>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Açıklama <span className="text-red-500">*</span>
-                    </label>
+                  </Field>
+                  <Field label={`Tutar (${currencySymbol(currency)})`}>
                     <input
-                      type="text"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
+                      type="number"
+                      min="0.01"
+                      step="any"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
                       className={inputCls}
                       disabled={loading}
-                      placeholder="ör. Boyahane ücreti"
+                    />
+                  </Field>
+                  <Field label="Tarih">
+                    <input
+                      type="date"
+                      value={occurredAt}
+                      onChange={(e) => setOccurredAt(e.target.value)}
+                      className={inputCls}
+                      disabled={loading}
+                    />
+                  </Field>
+                  <div className="sm:col-span-2">
+                    <CurrencyFields
+                      currency={currency}
+                      fxRate={fxRate}
+                      onCurrencyChange={setCurrency}
+                      onFxRateChange={setFxRate}
+                      disabled={loading}
                     />
                   </div>
-                )}
-                {showPaymentMethod && (
+                  {showPaymentMethod ? (
+                    <Field label="Ödeme şekli">
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                        className={inputCls}
+                        disabled={loading}
+                      >
+                        {PAYMENT_METHODS.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : (
+                    <Field label="Açıklama" required>
+                      <input
+                        type="text"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className={inputCls}
+                        disabled={loading}
+                        placeholder="ör. Boyahane ücreti"
+                      />
+                    </Field>
+                  )}
+                  {showPaymentMethod && (
+                    <div className="sm:col-span-2">
+                      <Field label="Not">
+                        <input
+                          type="text"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          className={inputCls}
+                          disabled={loading}
+                          placeholder="Opsiyonel"
+                        />
+                      </Field>
+                    </div>
+                  )}
                   <div className="sm:col-span-2">
-                    <label className="block text-xs text-gray-500 mb-1">Not</label>
-                    <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} disabled={loading} placeholder="Opsiyonel" />
+                    {error && <p className="text-sm text-danger mb-2">{error}</p>}
+                    {message && <p className="text-sm text-ok mb-2">{message}</p>}
+                    <Button type="submit" variant="accent" fullWidth disabled={loading}>
+                      {loading ? 'Kaydediliyor…' : 'Kaydet'}
+                    </Button>
                   </div>
-                )}
-                <div className="sm:col-span-2">
-                  {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
-                  {message && <p className="text-sm text-emerald-700 mb-2">{message}</p>}
-                  <button type="submit" disabled={loading} className="w-full py-2.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-700 rounded-lg disabled:opacity-50">
-                    {loading ? 'Kaydediliyor…' : 'Kaydet'}
-                  </button>
-                </div>
-              </form>
+                </form>
+              </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-900">Hareketler</h3>
-              </div>
+            <div className="bg-surface rounded-xl border border-line overflow-hidden shadow-[0_1px_2px_rgba(15,28,46,0.04)]">
+              <PanelHeader title="Hareketler" subtitle="Bu cariye ait kayıtlar" />
               {partyEntries.length === 0 ? (
-                <p className="text-sm text-gray-400 p-6 text-center">Hareket yok.</p>
+                <p className="text-sm text-muted p-6 text-center">Hareket yok.</p>
               ) : (
-                <ul className="divide-y divide-gray-100">
+                <ul className="divide-y divide-line">
                   {partyEntries.map((e) => (
-                    <li key={e.id} className="px-4 py-3 flex items-center justify-between gap-3 text-sm">
+                    <li key={e.id} className="px-4 py-3.5 flex items-center justify-between gap-3 text-sm">
                       <div className="min-w-0">
-                        <p className="font-medium text-gray-900">
+                        <p className="font-medium text-ink">
                           {entryTypeLabel(e.entry_type)}
                           {(e.entry_type === 'odeme' || e.entry_type === 'tahsilat') && e.payment_method ? (
-                            <span className="ml-1.5 text-xs font-normal text-gray-500">
+                            <span className="ml-1.5 text-xs font-normal text-muted">
                               · {paymentMethodLabel(e.payment_method)}
                             </span>
                           ) : null}
                         </p>
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-muted mt-0.5">
                           {formatTRDate(e.occurred_at)}
                           {e.voucher_number ? ` · ${e.voucher_number}` : ''}
                           {e.notes ? ` · ${e.notes}` : ''}
                         </p>
                       </div>
-                      <p className="font-semibold tabular-nums text-gray-900 shrink-0">₺{fmt(Number(e.amount))}</p>
+                      <p className="font-semibold tabular-nums text-ink shrink-0">₺{fmt(Number(e.amount))}</p>
                     </li>
                   ))}
                 </ul>
@@ -381,7 +413,7 @@ export default function CariClient({ parties: initialParties, entries: initialEn
             </div>
           </>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-sm text-gray-400">
+          <div className="bg-surface rounded-xl border border-line p-10 text-center text-sm text-muted">
             Sol listeden cari seçin.
           </div>
         )}

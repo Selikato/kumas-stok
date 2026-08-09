@@ -28,15 +28,20 @@ export default function PeriodSummary({
     <section className="space-y-3">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h2 className="text-sm font-medium text-gray-900">{title}</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{movementCount} hareket · stok değeri anlık</p>
+          <h2 className="text-sm font-medium text-ink">{title}</h2>
+          <p className="text-xs text-muted mt-0.5">{movementCount} hareket · stok değeri anlık</p>
         </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <Card label="Giriş tutarı" value={formatMoney(girisTutar)} />
         <Card label="Çıkış maliyeti" value={formatMoney(cikisMaliyet)} />
         <Card label="Çıkış satış" value={formatMoney(cikisSatis)} />
-        <Card label="Brüt kâr (satış−maliyet)" value={formatMoney(brutKar)} highlight={brutKar >= 0} danger={brutKar < 0} />
+        <Card
+          label="Brüt kâr (satış−maliyet)"
+          value={formatMoney(brutKar)}
+          highlight={brutKar >= 0}
+          danger={brutKar < 0}
+        />
         <Card label="Miktar G / Ç" value={`${fmtQty(girisQty)} / ${fmtQty(cikisQty)}`} />
         <Card label="Stok değeri" value={formatMoney(stockValue)} dark />
       </div>
@@ -61,22 +66,26 @@ function Card({
     <div
       className={`rounded-xl border px-4 py-3.5 ${
         dark
-          ? 'bg-gray-900 border-gray-900'
-          : 'bg-white border-gray-200'
+          ? 'bg-ink border-ink'
+          : 'bg-surface border-line shadow-[0_1px_2px_rgba(15,28,46,0.04)]'
       }`}
     >
-      <p className={`text-[11px] uppercase tracking-wide ${dark ? 'text-gray-400' : 'text-gray-400'}`}>
+      <p
+        className={`text-[10px] uppercase tracking-[0.12em] font-medium ${
+          dark ? 'text-white/55' : 'text-muted'
+        }`}
+      >
         {label}
       </p>
       <p
-        className={`text-lg font-semibold mt-1 tabular-nums ${
+        className={`text-lg font-semibold mt-1.5 tabular-nums tracking-tight ${
           dark
             ? 'text-white'
             : danger
-              ? 'text-red-600'
+              ? 'text-danger'
               : highlight
-                ? 'text-emerald-700'
-                : 'text-gray-900'
+                ? 'text-ok'
+                : 'text-ink'
         }`}
       >
         {value}
