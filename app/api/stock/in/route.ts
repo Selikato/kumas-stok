@@ -219,8 +219,9 @@ export async function POST(request: Request) {
 
     const imm = body.immediateOut
     if (imm?.partyId) {
-      const outQty = imm.quantity != null ? Number(imm.quantity) : qty
-      if (!(outQty > 0) || outQty > qty + 1e-9) {
+      const QTY_EPS = 1e-9
+      const outQtyRaw = imm.quantity != null ? Number(imm.quantity) : qty
+      if (!(outQtyRaw > 0) || outQtyRaw > qty + QTY_EPS) {
         await sb.from('account_entries').delete().eq('movement_id', movementId)
         await sb.from('stock_movements').delete().eq('id', movementId)
         await sb.from('rolls').delete().eq('id', newRoll.id)
@@ -229,6 +230,8 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       }
+      // Float toleransında bile stok negatif olmasın: çıkış miktarını girişe sıkıştır
+      const outQty = Math.min(outQtyRaw, qty)
 
       const outCurrency: MoneyCurrency = imm.currency === 'USD' ? 'USD' : 'TRY'
       const originalSale = Number(imm.salePrice)
@@ -275,7 +278,7 @@ export async function POST(request: Request) {
       const dest = outParty.name
       const outFxSuffix = fxNote(outCurrency, outFxRate, originalSale)
       const saleTotal = outQty * saleTry
-      const newQty = qty - outQty
+      const newQty = Math.max(0, qty - outQty)
 
       const { data: updatedRoll, error: qtyErr } = await sb
         .from('rolls')
