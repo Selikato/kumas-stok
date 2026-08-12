@@ -117,9 +117,25 @@ export function entryTypeLabel(t: AccountEntryType): string {
   switch (t) {
     case 'borc': return 'Alış'
     case 'alacak': return 'Satış'
-    case 'odeme': return 'Ödeme'
-    case 'tahsilat': return 'Tahsilat'
+    case 'odeme':
+    case 'tahsilat':
+      return 'Ödeme'
   }
+}
+
+/** Formdaki tek “Ödeme” seçeneği → veritabanı kayıt tipi */
+export function resolvePaymentEntryType(kind: PartyKind, balance: number): 'odeme' | 'tahsilat' {
+  if (kind === 'musteri') return 'tahsilat'
+  if (kind === 'tedarikci') return 'odeme'
+  if (balance > 0.005) return 'tahsilat'
+  if (balance < -0.005) return 'odeme'
+  return 'tahsilat'
+}
+
+export function paymentEntryHint(kind: PartyKind, balance: number): string {
+  const t = resolvePaymentEntryType(kind, balance)
+  if (t === 'tahsilat') return 'Alacak tahsil edilir (müşteri ödedi).'
+  return 'Borç ödenir (tedarikçiye / cariye ödeme).'
 }
 
 export function paymentMethodLabel(m: string | null | undefined): string {

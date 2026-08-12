@@ -44,7 +44,7 @@ export default async function CariPage() {
   return (
     <PageShell
       title="Cari hesaplar"
-      subtitle="Tedarikçi borçları, müşteri alacakları, ödeme ve tahsilat"
+      subtitle="Tedarikçi borçları, müşteri alacakları, ödeme, alış ve satış"
     >
       <CariClient parties={parties} entries={entries} />
     </PageShell>

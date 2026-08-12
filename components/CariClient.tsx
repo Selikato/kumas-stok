@@ -10,6 +10,8 @@ import {
   partyKindLabel,
   paymentMethodLabel,
   PAYMENT_METHODS,
+  paymentEntryHint,
+  resolvePaymentEntryType,
   type AccountEntry,
   type AccountEntryType,
   type Party,
@@ -31,6 +33,7 @@ type Props = {
 }
 
 type ListFilter = 'all' | 'alacakli' | 'borclu'
+type FormEntryType = 'payment' | 'borc' | 'alacak'
 
 export default function CariClient({ parties: initialParties, entries: initialEntries }: Props) {
   const router = useRouter()
@@ -38,7 +41,7 @@ export default function CariClient({ parties: initialParties, entries: initialEn
   const [entries, setEntries] = useState(initialEntries)
   const [listFilter, setListFilter] = useState<ListFilter>('all')
   const [selectedId, setSelectedId] = useState(initialParties[0]?.id ?? '')
-  const [entryType, setEntryType] = useState<AccountEntryType>('odeme')
+  const [entryType, setEntryType] = useState<FormEntryType>('payment')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState<MoneyCurrency>('TRY')
   const [fxRate, setFxRate] = useState('')
@@ -87,7 +90,12 @@ export default function CariClient({ parties: initialParties, entries: initialEn
   }, [sortedFiltered, selectedId])
 
   const selected = parties.find((p) => p.id === selectedId) ?? null
-  const showPaymentMethod = entryType === 'odeme' || entryType === 'tahsilat'
+  const selectedBalance = selected ? balances.get(selected.id) ?? 0 : 0
+  const resolvedEntryType: AccountEntryType =
+    entryType === 'payment'
+      ? resolvePaymentEntryType(selected?.kind ?? 'musteri', selectedBalance)
+      : entryType
+  const showPaymentMethod = entryType === 'payment'
 
   const partyEntries = entries
     .filter((e) => e.party_id === selectedId)
@@ -130,7 +138,7 @@ export default function CariClient({ parties: initialParties, entries: initialEn
     try {
       const res = await insertAccountEntry({
         party_id: selectedId,
-        entry_type: entryType,
+        entry_type: resolvedEntryType,
         amount: tryAmount,
         occurred_at: occurredAt,
         notes: noteParts.join(' · ') || undefined,
@@ -291,15 +299,19 @@ export default function CariClient({ parties: initialParties, entries: initialEn
                   <Field label="İşlem">
                     <select
                       value={entryType}
-                      onChange={(e) => setEntryType(e.target.value as AccountEntryType)}
+                      onChange={(e) => setEntryType(e.target.value as FormEntryType)}
                       className={inputCls}
                       disabled={loading}
                     >
-                      <option value="odeme">Ödeme (borç azalt)</option>
-                      <option value="tahsilat">Tahsilat (alacak azalt)</option>
+                      <option value="payment">Ödeme</option>
                       <option value="borc">Alış</option>
                       <option value="alacak">Satış</option>
                     </select>
+                    {entryType === 'payment' && selected && (
+                      <p className="text-[11px] text-muted mt-1.5">
+                        {paymentEntryHint(selected.kind, selectedBalance)}
+                      </p>
+                    )}
                   </Field>
                   <Field label={`Tutar (${currencySymbol(currency)})`}>
                     <input
