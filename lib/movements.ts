@@ -85,3 +85,64 @@ export function summarizeMovements(rows: MovementRow[]) {
   }
   return { girisQty, cikisQty, girisTutar, cikisMaliyet, cikisSatis, count: rows.length }
 }
+
+export type GirisEntryLine = {
+  id: string
+  occurred_at: string
+  fabric_name: string | null
+  fabric_unit: string | null
+  amount: number
+  unit_price: number | null
+  line_total: number
+  voucher_number: string | null
+}
+
+export type GirisEntrySummary = {
+  lines: GirisEntryLine[]
+  totalQty: number
+  totalAmount: number
+  avgPrice: number | null
+  qtyLabel: string
+}
+
+/** Bu ay girişleri — miktar × fiyat = ara toplam; dönem özeti tablosu */
+export function summarizeGirisEntries(rows: MovementRow[]): GirisEntrySummary {
+  const lines: GirisEntryLine[] = rows
+    .filter((m) => isGiris(m.movement_type))
+    .map((m) => {
+      const amount = Number(m.amount)
+      const unit_price = m.unit_price != null ? Number(m.unit_price) : null
+      const line_total = movementMoney(m) ?? (unit_price != null ? amount * unit_price : 0)
+      return {
+        id: m.id,
+        occurred_at: m.occurred_at,
+        fabric_name: m.fabric_name ?? null,
+        fabric_unit: m.fabric_unit ?? null,
+        amount,
+        unit_price,
+        line_total,
+        voucher_number: m.voucher_number,
+      }
+    })
+    .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id))
+
+  let totalQty = 0
+  let totalAmount = 0
+  for (const line of lines) {
+    totalQty += line.amount
+    totalAmount += line.line_total
+  }
+
+  const units = new Set(lines.map((l) => l.fabric_unit).filter(Boolean))
+  let qtyLabel = 'Toplam miktar'
+  if (units.size === 1 && units.has('metre')) qtyLabel = 'Toplam metre'
+  else if (units.size === 1 && units.has('kg')) qtyLabel = 'Toplam kg'
+
+  return {
+    lines,
+    totalQty,
+    totalAmount,
+    avgPrice: totalQty > 0.005 ? totalAmount / totalQty : null,
+    qtyLabel,
+  }
+}

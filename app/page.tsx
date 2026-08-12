@@ -5,7 +5,7 @@ import PageShell from '@/components/ui/PageShell'
 import PeriodSummary from '@/components/PeriodSummary'
 import { totalValue } from '@/lib/fabricStats'
 import { fetchMovements } from '@/lib/queries'
-import { monthRange, summarizeMovements } from '@/lib/movements'
+import { monthRange, summarizeMovements, summarizeGirisEntries } from '@/lib/movements'
 import type { Fabric, Roll } from '@/app/page-types'
 
 export type { Fabric, Variant, Roll } from '@/app/page-types'
@@ -84,6 +84,7 @@ export default async function Home() {
   const { from, to } = monthRange()
   const movements = await fetchMovements({ from, to })
   const summary = summarizeMovements(movements)
+  const girisSummary = summarizeGirisEntries(movements)
   const stockValue = fabrics.reduce((s, f) => s + totalValue(f), 0)
 
   return (
@@ -102,6 +103,7 @@ export default async function Home() {
         cikisQty={summary.cikisQty}
         movementCount={summary.count}
         stockValue={stockValue}
+        girisSummary={girisSummary}
       />
 
       <div className="flex items-end justify-between gap-3 pt-1">

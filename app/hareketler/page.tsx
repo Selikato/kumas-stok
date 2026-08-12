@@ -3,7 +3,7 @@ import PageShell from '@/components/ui/PageShell'
 import PeriodSummary from '@/components/PeriodSummary'
 import MovementsTable from '@/components/MovementsTable'
 import { fetchMovements } from '@/lib/queries'
-import { monthRange, summarizeMovements } from '@/lib/movements'
+import { monthRange, summarizeMovements, summarizeGirisEntries } from '@/lib/movements'
 import { totalValue } from '@/lib/fabricStats'
 import { supabase } from '@/lib/supabaseClient'
 import type { Fabric } from '@/app/page-types'
@@ -35,6 +35,7 @@ export default async function HareketlerPage({
     type: type || undefined,
   })
   const summary = summarizeMovements(movements)
+  const girisSummary = summarizeGirisEntries(movements)
   const stockValue = await stockValueNow()
 
   return (
@@ -51,6 +52,7 @@ export default async function HareketlerPage({
         cikisQty={summary.cikisQty}
         movementCount={summary.count}
         stockValue={stockValue}
+        girisSummary={girisSummary}
       />
 
       <Suspense fallback={<p className="text-sm text-muted">Yükleniyor…</p>}>
