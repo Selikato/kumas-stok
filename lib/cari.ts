@@ -51,6 +51,37 @@ export function partyBalance(
   return bal
 }
 
+/** Müşterinin bizdeki alacağı — biz ona borçluysak (bakiye negatif) */
+export function customerStoreCredit(balance: number): number {
+  return balance < -0.005 ? Math.abs(balance) : 0
+}
+
+/** Tedarikçi tarafında bizim alacağımız — onlar bize borçluysa (bakiye pozitif, tedarikçi) */
+export function supplierStoreCredit(balance: number): number {
+  return balance > 0.005 ? balance : 0
+}
+
+/** Satış sonrası tahsil edilecek net tutar (TRY, ≥ 0) */
+export function netDueAfterSale(balance: number, saleTotal: number): number {
+  return Math.max(0, balance + saleTotal)
+}
+
+/** Alış sonrası tedarikçiye ödenecek net tutar (TRY, ≥ 0) */
+export function netDueAfterPurchase(balance: number, purchaseTotal: number): number {
+  const newBal = balance - purchaseTotal
+  return newBal < -0.005 ? Math.abs(newBal) : 0
+}
+
+/** Satışta mahsup edilen alacak (müşterinin bizdeki bakiyesi) */
+export function creditAppliedOnSale(balance: number, saleTotal: number): number {
+  return Math.min(customerStoreCredit(balance), saleTotal)
+}
+
+/** Alışta mahsup edilen alacak (tedarikçiye fazla ödememiz) */
+export function creditAppliedOnPurchase(balance: number, purchaseTotal: number): number {
+  return Math.min(supplierStoreCredit(balance), purchaseTotal)
+}
+
 export function formatBalance(bal: number): { label: string; amount: number } {
   if (Math.abs(bal) < 0.005) return { label: 'Bakiye yok', amount: 0 }
   if (bal > 0) return { label: 'Alacak', amount: bal }

@@ -7,11 +7,14 @@ import { fmt, parsePositiveNumber, parseNonNegativeNumber, todayISODate, unitLab
 import { inputCls } from '@/lib/stockHelpers'
 import type { Fabric, Roll } from '@/app/page'
 import { totalQty } from '@/lib/fabricStats'
+import { sortRollsFifo, allocateFifo } from '@/lib/fifo'
 import type { Party } from '@/lib/cari'
 import type { MoneyCurrency } from '@/lib/money'
 import { currencySymbol } from '@/lib/money'
 import QuickPartyAdd from '@/components/QuickPartyAdd'
 import CurrencyFields from '@/components/CurrencyFields'
+import PartyBalanceHint from '@/components/PartyBalanceHint'
+import { fetchPartyBalance } from '@/lib/queries'
 import ModalFrame from '@/components/ui/ModalFrame'
 import Field from '@/components/ui/Field'
 import Button from '@/components/ui/Button'
@@ -42,6 +45,9 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
   const [parties, setParties] = useState<Party[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fifoTotalQty, setFifoTotalQty] = useState('')
+  const [partyBalanceAmt, setPartyBalanceAmt] = useState<number | null>(null)
+  const [balanceLoading, setBalanceLoading] = useState(false)
   const submittingRef = useRef(false)
 
   const fabric = stockedFabrics.find((f) => f.id === fabricId) ?? null
@@ -53,23 +59,41 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
   const allRolls: FlatRoll[] = useMemo(
     () =>
       fabric
-        ? fabric.variants
-            .flatMap((v) => v.rolls.map((r) => ({ ...r, variantName: v.color_name })))
-            .filter((r) => (r.quantity ?? 0) > 0)
-            .sort((a, b) => {
-              const da = a.received_at || ''
-              const db = b.received_at || ''
-              if (da && db && da !== db) return da.localeCompare(db)
-              if (da && !db) return -1
-              if (!da && db) return 1
-              return (a.roll_number || '').localeCompare(b.roll_number || '', 'tr')
-            })
+        ? sortRollsFifo(
+            fabric.variants
+              .flatMap((v) => v.rolls.map((r) => ({ ...r, variantName: v.color_name })))
+              .filter((r) => (r.quantity ?? 0) > 0)
+          )
         : [],
     [fabric]
   )
 
+  const availableQty = useMemo(
+    () => allRolls.reduce((sum, r) => sum + (r.quantity ?? 0), 0),
+    [allRolls]
+  )
+
   const unit = unitLabel(fabric?.unit)
   const selectedIds = Object.keys(selected).filter((id) => selected[id])
+
+  const estimatedSaleTry = useMemo(() => {
+    const sale = parseNonNegativeNumber(salePrice)
+    if (sale == null || selectedIds.length === 0) return null
+    let qtyTotal = 0
+    for (const id of selectedIds) {
+      const amt = parsePositiveNumber(amounts[id] ?? '')
+      if (amt == null) return null
+      qtyTotal += amt
+    }
+    if (qtyTotal <= 0) return null
+    const gross = qtyTotal * sale
+    if (currency === 'USD') {
+      const fx = parsePositiveNumber(fxRate)
+      if (fx == null) return null
+      return gross * fx
+    }
+    return gross
+  }, [salePrice, selectedIds, amounts, currency, fxRate])
 
   useEffect(() => {
     if (!open) return
@@ -82,6 +106,9 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
     setCurrency('TRY')
     setFxRate('')
     setOccurredAt(todayISODate())
+    setFifoTotalQty('')
+    setPartyBalanceAmt(null)
+    setBalanceLoading(false)
     setError(null)
     setLoading(false)
     supabase
@@ -92,8 +119,28 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
   }, [open])
 
   useEffect(() => {
+    if (!partyId) {
+      setPartyBalanceAmt(null)
+      return
+    }
+    let cancelled = false
+    setBalanceLoading(true)
+    fetchPartyBalance(partyId)
+      .then((bal) => {
+        if (!cancelled) setPartyBalanceAmt(bal)
+      })
+      .finally(() => {
+        if (!cancelled) setBalanceLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [partyId])
+
+  useEffect(() => {
     setSelected({})
     setAmounts({})
+    setFifoTotalQty('')
     setError(null)
   }, [fabricId])
 
@@ -119,6 +166,34 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
     const party = customers.find((p) => p.id === value)
     setPartyId(value)
     setDestination(party?.name ?? '')
+  }
+
+  function applyFifo() {
+    const total = parsePositiveNumber(fifoTotalQty)
+    if (total == null) {
+      setError('FIFO için geçerli toplam çıkış miktarı giriniz.')
+      return
+    }
+    const { lines, shortfall } = allocateFifo(allRolls, total)
+    if (lines.length === 0) {
+      setError('Dağıtılacak stok kaydı bulunamadı.')
+      return
+    }
+    const nextSelected: Record<string, boolean> = {}
+    const nextAmounts: Record<string, string> = {}
+    for (const line of lines) {
+      nextSelected[line.rollId] = true
+      nextAmounts[line.rollId] = String(line.amount)
+    }
+    setSelected(nextSelected)
+    setAmounts(nextAmounts)
+    if (shortfall > 1e-9) {
+      setError(
+        `Stok yetersiz: ${shortfall.toFixed(2)}${unit ? ` ${unit}` : ''} dağıtılamadı (FIFO ile kalan).`
+      )
+    } else {
+      setError(null)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -183,6 +258,12 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
         `maliyet ₺${fmt(Number(data.totalCost || 0))}`,
       ]
       if (Number(data.totalSale) > 0) parts.push(`satış ₺${fmt(Number(data.totalSale))}`)
+      if (data.cari?.creditApplied > 0.005) {
+        parts.push(`mahsup ₺${fmt(Number(data.cari.creditApplied))}`)
+      }
+      if (data.cari?.netDue != null && Number(data.cari.netDue) >= 0) {
+        parts.push(`tahsil ₺${fmt(Number(data.cari.netDue))}`)
+      }
       parts.push(`→ ${dest}`)
       onSuccess(parts.filter(Boolean).join(' · '))
       if (data.failed > 0) onError(`${data.failed} kayıt işlenemedi.`)
@@ -200,7 +281,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
     <ModalFrame
       open={open}
       title="Kumaş Çıkışı"
-      subtitle="Stoklar giriş tarihine göre (eski önce)"
+      subtitle="Stoklar giriş tarihine göre (FIFO — eski önce)"
       onClose={onClose}
       loading={loading}
       maxWidth="lg"
@@ -251,10 +332,36 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
             <div>
               <label className="block text-xs font-medium text-muted mb-2">
                 Stok kayıtları <span className="text-danger">*</span>
-                <span className="text-muted/70 font-normal ml-1">tarihe göre · maliyet = alış</span>
+                <span className="text-muted/70 font-normal ml-1">FIFO sırası · maliyet = alış</span>
               </label>
+
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="number"
+                  min="0.01"
+                  step="any"
+                  value={fifoTotalQty}
+                  onChange={(e) => setFifoTotalQty(e.target.value)}
+                  placeholder={`Toplam çıkış${unit ? ` (${unit})` : ''}`}
+                  className={`${inputCls} flex-1`}
+                  disabled={loading}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={applyFifo}
+                  disabled={loading || !fifoTotalQty.trim()}
+                >
+                  FIFO ile dağıt
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted mb-2">
+                Mevcut stok: {availableQty}
+                {unit ? ` ${unit}` : ''} — en eski kayıttan başlayarak otomatik seçilir.
+              </p>
+
               <div className="space-y-2 max-h-48 overflow-y-auto border border-line rounded-lg p-2 bg-paper/30">
-                {allRolls.map((r) => {
+                {allRolls.map((r, idx) => {
                   const isOn = !!selected[r.id]
                   return (
                     <div
@@ -264,6 +371,12 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
                       }`}
                     >
                       <label className="flex items-start gap-2 cursor-pointer">
+                        <span
+                          className="mt-0.5 shrink-0 w-5 h-5 rounded-full bg-paper border border-line text-[10px] font-mono-ui flex items-center justify-center text-muted"
+                          title="FIFO sırası"
+                        >
+                          {idx + 1}
+                        </span>
                         <input
                           type="checkbox"
                           checked={isOn}
@@ -361,6 +474,15 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
                 disabled={loading}
               />
             </Field>
+
+            {partyId && (
+              <PartyBalanceHint
+                balance={partyBalanceAmt}
+                loading={balanceLoading}
+                mode="sale"
+                transactionTotal={estimatedSaleTry}
+              />
+            )}
           </>
         )}
 

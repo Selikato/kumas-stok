@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import type { Fabric } from '@/app/page'
 import { fmt, formatQtyWithUnit, formatTRDate, unitLabel } from '@/lib/helpers'
 import {
@@ -11,6 +11,8 @@ import {
   fabricRouteSummary,
 } from '@/lib/fabricStats'
 import { inputCls } from '@/lib/stockHelpers'
+import { sortRollsFifo } from '@/lib/fifo'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/Accordion'
 
 export default function FabricList({ fabrics }: { fabrics: Fabric[] }) {
   const [query, setQuery] = useState('')
@@ -79,154 +81,74 @@ export default function FabricList({ fabrics }: { fabrics: Fabric[] }) {
         </p>
       )}
 
-      <div className="hidden md:block bg-surface rounded-xl border border-line overflow-hidden shadow-[0_1px_2px_rgba(15,28,46,0.04)]">
-        {filtered.length === 0 ? (
-          <EmptyState hasQuery={!!query} hasAny={fabrics.length > 0} />
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left bg-paper/60">
-                <th className="px-5 py-3 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium">
-                  Kumaş Adı
-                </th>
-                <th className="px-5 py-3 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium">
-                  Birim
-                </th>
-                <th className="px-5 py-3 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium">
-                  Nereden / Depo
-                </th>
-                <th className="px-5 py-3 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium text-right">
-                  Kayıt
-                </th>
-                <th className="px-5 py-3 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium text-right">
-                  Toplam Miktar
-                </th>
-                <th className="px-5 py-3 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium text-right">
-                  Ort. Fiyat
-                </th>
-                <th className="px-5 py-3 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium text-right">
-                  Toplam Tutar
-                </th>
-                <th className="px-3 py-3 w-8" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {filtered.map((fabric) => {
-                const ap = avgPrice(fabric)
-                const tv = totalValue(fabric)
-                const route = fabricRouteSummary(fabric)
-                const isOpen = expanded === fabric.id
-                return (
-                  <React.Fragment key={fabric.id}>
-                    <tr
-                      className={`transition-colors cursor-pointer ${isOpen ? 'bg-paper/50' : 'hover:bg-paper/40'}`}
-                      onClick={() => setExpanded(isOpen ? null : fabric.id)}
-                    >
-                      <td className="px-5 py-3.5 font-medium text-ink">{fabric.name}</td>
-                      <td className="px-5 py-3.5 text-xs text-muted">
-                        {unitLabel(fabric.unit) || <span className="text-line">—</span>}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {route ? (
-                          <span className="text-muted text-xs">{route}</span>
-                        ) : (
-                          <span className="text-line">—</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-semibold text-ink tabular-nums">
-                        {totalRolls(fabric)}
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-ink-soft tabular-nums">
-                        {formatQtyWithUnit(totalQty(fabric), fabric.unit)}
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-muted tabular-nums">
-                        {ap != null ? `₺${fmt(ap)}` : <span className="text-line">—</span>}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-medium text-ink tabular-nums">
-                        {tv > 0 ? `₺${fmt(tv)}` : <span className="text-line">—</span>}
-                      </td>
-                      <td className="px-3 py-3.5 text-muted">
-                        <svg
-                          className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180 text-accent' : ''}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </td>
-                    </tr>
+      {filtered.length === 0 ? (
+        <EmptyState hasQuery={!!query} hasAny={fabrics.length > 0} />
+      ) : (
+        <>
+          <div className="hidden lg:grid grid-cols-[1.4fr_0.6fr_1fr_0.5fr_0.7fr_0.7fr_0.8fr] gap-3 px-5 py-2 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium">
+            <span>Kumaş Adı</span>
+            <span>Birim</span>
+            <span>Nereden / Depo</span>
+            <span className="text-right">Kayıt</span>
+            <span className="text-right">Miktar</span>
+            <span className="text-right">Ort. Fiyat</span>
+            <span className="text-right pr-9">Toplam</span>
+          </div>
 
-                    {isOpen && (
-                      <tr>
-                        <td colSpan={8} className="bg-paper/40 px-5 py-4 border-b border-line">
-                          <VariantDetail variants={fabric.variants} unit={fabric.unit} />
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+          <Accordion value={expanded} onValueChange={setExpanded}>
+            {filtered.map((fabric) => {
+              const ap = avgPrice(fabric)
+              const tv = totalValue(fabric)
+              const route = fabricRouteSummary(fabric)
 
-      <div className="md:hidden space-y-2">
-        {filtered.length === 0 ? (
-          <EmptyState hasQuery={!!query} hasAny={fabrics.length > 0} />
-        ) : (
-          filtered.map((fabric) => {
-            const route = fabricRouteSummary(fabric)
-            const isOpen = expanded === fabric.id
-            return (
-              <div
-                key={fabric.id}
-                className="bg-surface rounded-xl border border-line overflow-hidden shadow-[0_1px_2px_rgba(15,28,46,0.04)]"
-              >
-                <button className="w-full text-left px-4 py-4" onClick={() => setExpanded(isOpen ? null : fabric.id)}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink truncate">{fabric.name}</p>
+              return (
+                <AccordionItem key={fabric.id} value={fabric.id}>
+                  <AccordionTrigger>
+                    {/* Mobil özet */}
+                    <div className="lg:hidden">
+                      <p className="font-semibold text-ink truncate">{fabric.name}</p>
                       <p className="text-xs text-muted mt-0.5">
                         {unitLabel(fabric.unit) || '—'}
-                        {totalValue(fabric) > 0 ? ` · ₺${fmt(totalValue(fabric))}` : ''}
+                        {tv > 0 ? ` · ₺${fmt(tv)}` : ''}
+                      </p>
+                      {route && <p className="text-xs text-muted mt-1.5 truncate">{route}</p>}
+                      <p className="text-sm font-semibold text-ink tabular-nums mt-2">
+                        {formatQtyWithUnit(totalQty(fabric), fabric.unit)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-right">
-                        <p className="text-[10px] uppercase tracking-wider text-muted">Miktar</p>
-                        <p className="font-semibold text-ink text-sm tabular-nums">
-                          {formatQtyWithUnit(totalQty(fabric), fabric.unit)}
-                        </p>
-                      </div>
-                      <svg
-                        className={`w-4 h-4 text-muted transition-transform ${isOpen ? 'rotate-180 text-accent' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
-                  {route && (
-                    <div className="mt-2.5">
-                      <span className="text-xs text-muted">{route}</span>
-                    </div>
-                  )}
-                </button>
 
-                {isOpen && (
-                  <div className="border-t border-line px-4 py-3 bg-paper/50">
+                    {/* Masaüstü tablo satırı */}
+                    <div className="hidden lg:grid grid-cols-[1.4fr_0.6fr_1fr_0.5fr_0.7fr_0.7fr_0.8fr] gap-3 items-center w-full text-sm pr-1">
+                      <span className="font-semibold text-ink truncate">{fabric.name}</span>
+                      <span className="text-xs text-muted">{unitLabel(fabric.unit) || '—'}</span>
+                      <span className="text-xs text-muted truncate">{route || '—'}</span>
+                      <span className="text-right font-semibold text-ink tabular-nums">
+                        {totalRolls(fabric)}
+                      </span>
+                      <span className="text-right text-ink-soft tabular-nums">
+                        {formatQtyWithUnit(totalQty(fabric), fabric.unit)}
+                      </span>
+                      <span className="text-right text-muted tabular-nums">
+                        {ap != null ? `₺${fmt(ap)}` : '—'}
+                      </span>
+                      <span className="text-right font-medium text-ink tabular-nums">
+                        {tv > 0 ? `₺${fmt(tv)}` : '—'}
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+
+                  <AccordionContent>
+                    <p className="text-[11px] uppercase tracking-wider text-muted font-medium mb-3">
+                      Stok kayıtları · giriş tarihine göre
+                    </p>
                     <VariantDetail variants={fabric.variants} unit={fabric.unit} />
-                  </div>
-                )}
-              </div>
-            )
-          })
-        )}
-      </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )
+            })}
+          </Accordion>
+        </>
+      )}
     </div>
   )
 }
@@ -263,11 +185,11 @@ function VariantDetail({
   variants: Fabric['variants']
   unit: string | null
 }) {
-  const rolls = variants
-    .flatMap((v) => v.rolls)
-    .filter((r) => (r.quantity ?? 0) > 0)
-    .slice()
-    .sort((a, b) => (b.quantity ?? 0) - (a.quantity ?? 0))
+  const rolls = sortRollsFifo(
+    variants
+      .flatMap((v) => v.rolls)
+      .filter((r) => (r.quantity ?? 0) > 0)
+  )
 
   if (rolls.length === 0) {
     return <p className="text-sm text-muted italic">Aktif stok kaydı yok.</p>
@@ -275,17 +197,25 @@ function VariantDetail({
 
   return (
     <div className="space-y-2">
-      {rolls.map((r) => (
+      {rolls.map((r, idx) => (
         <div
           key={r.id}
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs rounded-lg border px-3 py-2 bg-surface border-line text-muted"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs rounded-lg border px-3 py-2.5 bg-paper/40 border-line/80 text-muted"
         >
+          <span
+            className="shrink-0 w-5 h-5 rounded-full bg-surface border border-line text-[10px] font-mono-ui flex items-center justify-center text-muted"
+            title="Giriş sırası (eski önce)"
+          >
+            {idx + 1}
+          </span>
+          {r.received_at && (
+            <span className="font-medium text-ink tabular-nums">{formatTRDate(r.received_at)}</span>
+          )}
           {r.roll_number && <span className="font-mono-ui text-ink-soft">{r.roll_number}</span>}
           <span className="font-medium text-ink tabular-nums">{formatQtyWithUnit(r.quantity ?? 0, unit)}</span>
           {r.unit_price != null && <span className="tabular-nums">₺{fmt(r.unit_price)}</span>}
           {r.lot_number && <span>Nereden: {r.lot_number}</span>}
           {r.location && <span>Depo: {r.location}</span>}
-          {r.received_at && <span>Tarih: {formatTRDate(r.received_at)}</span>}
         </div>
       ))}
     </div>

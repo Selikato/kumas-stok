@@ -20,8 +20,7 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
 
   const label = kind === 'tedarikci' ? 'tedarikçi' : 'müşteri'
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleAdd() {
     const trimmed = name.trim()
     if (!trimmed) { setError('İsim zorunlu.'); return }
 
@@ -83,17 +82,29 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
 
   return (
     <div className="mt-2 rounded-lg border border-line bg-paper/50 p-2.5 space-y-2">
-      <form onSubmit={handleAdd} className="flex gap-2">
+      <div className="flex gap-2">
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void handleAdd()
+            }
+          }}
           placeholder={`Yeni ${label} adı`}
           className={inputCls}
           disabled={loading || disabled}
           autoFocus
         />
-        <Button type="submit" variant="primary" disabled={loading || disabled} className="!py-2 !text-xs shrink-0">
+        <Button
+          type="button"
+          variant="primary"
+          disabled={loading || disabled}
+          className="!py-2 !text-xs shrink-0"
+          onClick={() => void handleAdd()}
+        >
           Ekle
         </Button>
         <button
@@ -108,7 +119,7 @@ export default function QuickPartyAdd({ kind, disabled, onCreated }: Props) {
         >
           Vazgeç
         </button>
-      </form>
+      </div>
       {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   )

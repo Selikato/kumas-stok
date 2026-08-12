@@ -4,6 +4,13 @@ import { requireSession } from '@/lib/apiAuth'
 import { generateFabricCode, generateRollNumber } from '@/lib/helpers'
 import { insertRoll, insertMovement, insertAccountEntry } from '@/lib/dbWrites'
 import { fxNote, toTry, type MoneyCurrency } from '@/lib/money'
+import {
+  partyBalance,
+  creditAppliedOnSale,
+  creditAppliedOnPurchase,
+  netDueAfterSale,
+  netDueAfterPurchase,
+} from '@/lib/cari'
 
 export async function POST(request: Request) {
   const denied = await requireSession()
@@ -21,6 +28,13 @@ export async function POST(request: Request) {
     occurredAt?: string
     currency?: MoneyCurrency
     fxRate?: number | null
+    immediateOut?: {
+      partyId: string
+      quantity?: number
+      salePrice: number
+      currency?: MoneyCurrency
+      fxRate?: number | null
+    } | null
   }
   try {
     body = await request.json()
@@ -196,6 +210,152 @@ export async function POST(request: Request) {
       }
     }
 
+    let immediateOutResult: {
+      voucher_number: string
+      quantity: number
+      destination: string
+      saleTotal: number
+    } | null = null
+
+    const imm = body.immediateOut
+    if (imm?.partyId) {
+      const outQty = imm.quantity != null ? Number(imm.quantity) : qty
+      if (!(outQty > 0) || outQty > qty + 1e-9) {
+        await sb.from('account_entries').delete().eq('movement_id', movementId)
+        await sb.from('stock_movements').delete().eq('id', movementId)
+        await sb.from('rolls').delete().eq('id', newRoll.id)
+        return NextResponse.json(
+          { error: 'Hemen çıkış miktarı giriş miktarından fazla olamaz.' },
+          { status: 400 }
+        )
+      }
+
+      const outCurrency: MoneyCurrency = imm.currency === 'USD' ? 'USD' : 'TRY'
+      const originalSale = Number(imm.salePrice)
+      if (Number.isNaN(originalSale) || originalSale < 0) {
+        await sb.from('account_entries').delete().eq('movement_id', movementId)
+        await sb.from('stock_movements').delete().eq('id', movementId)
+        await sb.from('rolls').delete().eq('id', newRoll.id)
+        return NextResponse.json({ error: 'Geçerli satış fiyatı giriniz.' }, { status: 400 })
+      }
+
+      let saleTry: number
+      let outFxRate: number
+      try {
+        const converted = toTry(originalSale, outCurrency, imm.fxRate)
+        saleTry = converted.tryAmount
+        outFxRate = converted.fxRate
+      } catch (err: unknown) {
+        await sb.from('account_entries').delete().eq('movement_id', movementId)
+        await sb.from('stock_movements').delete().eq('id', movementId)
+        await sb.from('rolls').delete().eq('id', newRoll.id)
+        const msg = err instanceof Error ? err.message : 'Kur hatası.'
+        return NextResponse.json({ error: msg }, { status: 400 })
+      }
+
+      const { data: outParty, error: outPartyErr } = await sb
+        .from('parties')
+        .select('id, name, kind')
+        .eq('id', imm.partyId)
+        .single()
+
+      if (outPartyErr || !outParty) {
+        await sb.from('account_entries').delete().eq('movement_id', movementId)
+        await sb.from('stock_movements').delete().eq('id', movementId)
+        await sb.from('rolls').delete().eq('id', newRoll.id)
+        return NextResponse.json({ error: 'Müşteri bulunamadı.' }, { status: 400 })
+      }
+      if (outParty.kind !== 'musteri' && outParty.kind !== 'her_ikisi') {
+        await sb.from('account_entries').delete().eq('movement_id', movementId)
+        await sb.from('stock_movements').delete().eq('id', movementId)
+        await sb.from('rolls').delete().eq('id', newRoll.id)
+        return NextResponse.json({ error: 'Seçilen cari müşteri değil.' }, { status: 400 })
+      }
+
+      const dest = outParty.name
+      const outFxSuffix = fxNote(outCurrency, outFxRate, originalSale)
+      const saleTotal = outQty * saleTry
+      const newQty = qty - outQty
+
+      const { data: updatedRoll, error: qtyErr } = await sb
+        .from('rolls')
+        .update({ quantity: newQty })
+        .eq('id', newRoll.id)
+        .gte('quantity', outQty)
+        .select('id')
+        .maybeSingle()
+
+      if (qtyErr || !updatedRoll) {
+        await sb.from('account_entries').delete().eq('movement_id', movementId)
+        await sb.from('stock_movements').delete().eq('id', movementId)
+        await sb.from('rolls').delete().eq('id', newRoll.id)
+        return NextResponse.json({ error: 'Hemen çıkış için stok güncellenemedi.' }, { status: 400 })
+      }
+
+      try {
+        const outMv = await insertMovement(
+          {
+            roll_id: newRoll.id,
+            movement_type: 'CIKIS',
+            amount: outQty,
+            occurred_at: occurredAt,
+            notes: [
+              `Hemen çıkış | Nereye: ${dest} | Satış: ₺${saleTry}`,
+              outFxSuffix,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            party_id: imm.partyId,
+            unit_price: saleTry,
+            unit_cost: price,
+            line_total: saleTotal,
+            currency: outCurrency,
+            fx_rate: outFxRate,
+            original_unit_price: originalSale,
+          },
+          sb
+        )
+
+        if (saleTotal > 0) {
+          try {
+            await insertAccountEntry(
+              {
+                party_id: imm.partyId,
+                entry_type: 'alacak',
+                amount: saleTotal,
+                occurred_at: occurredAt,
+                notes: [`${name} satış · ${outMv.voucher_number}`, outFxSuffix]
+                  .filter(Boolean)
+                  .join(' · '),
+                movement_id: outMv.id,
+                voucher_number: outMv.voucher_number,
+                currency: outCurrency,
+                fx_rate: outFxRate,
+                original_amount: outQty * originalSale,
+              },
+              sb
+            )
+          } catch (cariErr) {
+            console.error('hemen cikis cari:', cariErr)
+          }
+        }
+
+        immediateOutResult = {
+          voucher_number: outMv.voucher_number,
+          quantity: outQty,
+          destination: dest,
+          saleTotal,
+        }
+      } catch (outErr) {
+        await sb.from('rolls').update({ quantity: qty }).eq('id', newRoll.id)
+        await sb.from('account_entries').delete().eq('movement_id', movementId)
+        await sb.from('stock_movements').delete().eq('id', movementId)
+        await sb.from('rolls').delete().eq('id', newRoll.id)
+        const msg = outErr instanceof Error ? outErr.message : 'Hemen çıkış kaydedilemedi.'
+        return NextResponse.json({ error: msg }, { status: 400 })
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       voucher_number: voucher,
@@ -203,6 +363,59 @@ export async function POST(request: Request) {
       quantity: qty,
       unit: fabricUnit,
       lineTotal,
+      immediateOut: immediateOutResult,
+      cari: await (async () => {
+        const { data: entries } = await sb
+          .from('account_entries')
+          .select('entry_type, amount')
+          .eq('party_id', partyId)
+        const { data: supplierRow } = await sb
+          .from('parties')
+          .select('opening_balance')
+          .eq('id', partyId)
+          .single()
+        const balanceAfterPurchase = partyBalance(
+          entries ?? [],
+          Number(supplierRow?.opening_balance) || 0
+        )
+        const balanceBeforePurchase = balanceAfterPurchase + lineTotal
+        const purchaseCari = {
+          balanceBefore: balanceBeforePurchase,
+          balanceAfter: balanceAfterPurchase,
+          creditApplied: creditAppliedOnPurchase(balanceBeforePurchase, lineTotal),
+          netDue: netDueAfterPurchase(balanceBeforePurchase, lineTotal),
+        }
+
+        if (!immediateOutResult || !imm?.partyId) {
+          return { purchase: purchaseCari, sale: null }
+        }
+
+        const { data: outEntries } = await sb
+          .from('account_entries')
+          .select('entry_type, amount')
+          .eq('party_id', imm.partyId)
+        const { data: customerRow } = await sb
+          .from('parties')
+          .select('opening_balance')
+          .eq('id', imm.partyId)
+          .single()
+        const saleTotal = immediateOutResult.saleTotal
+        const balanceAfterSale = partyBalance(
+          outEntries ?? [],
+          Number(customerRow?.opening_balance) || 0
+        )
+        const balanceBeforeSale = balanceAfterSale - saleTotal
+
+        return {
+          purchase: purchaseCari,
+          sale: {
+            balanceBefore: balanceBeforeSale,
+            balanceAfter: balanceAfterSale,
+            creditApplied: creditAppliedOnSale(balanceBeforeSale, saleTotal),
+            netDue: netDueAfterSale(balanceBeforeSale, saleTotal),
+          },
+        }
+      })(),
     })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Giriş kaydedilemedi.'

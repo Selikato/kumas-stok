@@ -3,6 +3,11 @@ import { createServiceClient } from '@/lib/supabaseAdmin'
 import { requireSession } from '@/lib/apiAuth'
 import { insertMovement, insertAccountEntry } from '@/lib/dbWrites'
 import { fxNote, toTry, type MoneyCurrency } from '@/lib/money'
+import {
+  partyBalance,
+  creditAppliedOnSale,
+  netDueAfterSale,
+} from '@/lib/cari'
 
 type Line = { rollId: string; amount: number }
 
@@ -199,6 +204,28 @@ export async function POST(request: Request) {
     )
   }
 
+  let balanceBefore = 0
+  let balanceAfter = 0
+  let creditApplied = 0
+  let netDue = 0
+
+  if (partyId && totalSale > 0) {
+    const { data: partyRow } = await sb
+      .from('parties')
+      .select('opening_balance')
+      .eq('id', partyId)
+      .single()
+    const { data: entries } = await sb
+      .from('account_entries')
+      .select('entry_type, amount')
+      .eq('party_id', partyId)
+
+    balanceAfter = partyBalance(entries ?? [], Number(partyRow?.opening_balance) || 0)
+    balanceBefore = balanceAfter - totalSale
+    creditApplied = creditAppliedOnSale(balanceBefore, totalSale)
+    netDue = netDueAfterSale(balanceBefore, totalSale)
+  }
+
   return NextResponse.json({
     ok: true,
     voucher_number: lastVoucher,
@@ -210,5 +237,11 @@ export async function POST(request: Request) {
     failures,
     destination: resolvedDest,
     fabricName,
+    cari: {
+      balanceBefore,
+      balanceAfter,
+      creditApplied,
+      netDue,
+    },
   })
 }

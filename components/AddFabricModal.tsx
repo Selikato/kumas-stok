@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import {
@@ -17,6 +17,9 @@ import type { MoneyCurrency } from '@/lib/money'
 import { currencySymbol } from '@/lib/money'
 import QuickPartyAdd from '@/components/QuickPartyAdd'
 import CurrencyFields from '@/components/CurrencyFields'
+import ImmediateOutPanel from '@/components/ImmediateOutPanel'
+import PartyBalanceHint from '@/components/PartyBalanceHint'
+import { fetchPartyBalance } from '@/lib/queries'
 import ModalFrame from '@/components/ui/ModalFrame'
 import Field from '@/components/ui/Field'
 import Button from '@/components/ui/Button'
@@ -61,6 +64,17 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
   const [error, setError] = useState<string | null>(null)
   const firstInputRef = useRef<HTMLSelectElement>(null)
 
+  const [immediateOutEnabled, setImmediateOutEnabled] = useState(false)
+  const [outPartyId, setOutPartyId] = useState('')
+  const [outQuantity, setOutQuantity] = useState('')
+  const [outSalePrice, setOutSalePrice] = useState('')
+  const [outCurrency, setOutCurrency] = useState<MoneyCurrency>('TRY')
+  const [outFxRate, setOutFxRate] = useState('')
+  const [supplierBalance, setSupplierBalance] = useState<number | null>(null)
+  const [customerBalance, setCustomerBalance] = useState<number | null>(null)
+  const [supplierBalanceLoading, setSupplierBalanceLoading] = useState(false)
+  const [customerBalanceLoading, setCustomerBalanceLoading] = useState(false)
+
   const selectedFabric = fabrics.find((f) => f.id === form.fabricId)
   const pickingExisting = form.fabricId !== '' && form.fabricId !== '__new__'
   const isNew = form.fabricId === '__new__' || (form.fabricId === '' && fabrics.length === 0)
@@ -68,6 +82,45 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     .filter((p) => p.kind === 'tedarikci' || p.kind === 'her_ikisi')
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, 'tr'))
+  const customers = parties
+    .filter((p) => p.kind === 'musteri' || p.kind === 'her_ikisi')
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr'))
+
+  const purchaseTotalTry = useMemo(() => {
+    const qty = parsePositiveNumber(form.quantity)
+    const price = parseNonNegativeNumber(form.unit_price)
+    if (qty == null || price == null) return null
+    const gross = qty * price
+    if (form.currency === 'USD') {
+      const fx = parsePositiveNumber(form.fxRate)
+      if (fx == null) return null
+      return gross * fx
+    }
+    return gross
+  }, [form.quantity, form.unit_price, form.currency, form.fxRate])
+
+  const immediateSaleTry = useMemo(() => {
+    if (!immediateOutEnabled) return null
+    const qtyIn = parsePositiveNumber(form.quantity)
+    const outQty = outQuantity.trim() ? parsePositiveNumber(outQuantity) : qtyIn
+    const sale = parseNonNegativeNumber(outSalePrice)
+    if (outQty == null || sale == null) return null
+    const gross = outQty * sale
+    if (outCurrency === 'USD') {
+      const fx = parsePositiveNumber(outFxRate)
+      if (fx == null) return null
+      return gross * fx
+    }
+    return gross
+  }, [
+    immediateOutEnabled,
+    form.quantity,
+    outQuantity,
+    outSalePrice,
+    outCurrency,
+    outFxRate,
+  ])
 
   useEffect(() => {
     if (!open) return
@@ -77,6 +130,14 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
       fabricId: fabrics.length === 0 ? '__new__' : '',
     })
     setError(null)
+    setImmediateOutEnabled(false)
+    setOutPartyId('')
+    setOutQuantity('')
+    setOutSalePrice('')
+    setOutCurrency('TRY')
+    setOutFxRate('')
+    setSupplierBalance(null)
+    setCustomerBalance(null)
     setTimeout(() => firstInputRef.current?.focus(), 50)
 
     supabase
@@ -102,6 +163,44 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
           )
       })
   }, [open, fabrics.length])
+
+  useEffect(() => {
+    if (!form.partyId) {
+      setSupplierBalance(null)
+      return
+    }
+    let cancelled = false
+    setSupplierBalanceLoading(true)
+    fetchPartyBalance(form.partyId)
+      .then((bal) => {
+        if (!cancelled) setSupplierBalance(bal)
+      })
+      .finally(() => {
+        if (!cancelled) setSupplierBalanceLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [form.partyId])
+
+  useEffect(() => {
+    if (!immediateOutEnabled || !outPartyId) {
+      setCustomerBalance(null)
+      return
+    }
+    let cancelled = false
+    setCustomerBalanceLoading(true)
+    fetchPartyBalance(outPartyId)
+      .then((bal) => {
+        if (!cancelled) setCustomerBalance(bal)
+      })
+      .finally(() => {
+        if (!cancelled) setCustomerBalanceLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [immediateOutEnabled, outPartyId])
 
   useEffect(() => {
     if (!open) return
@@ -157,6 +256,22 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
       return
     }
 
+    if (immediateOutEnabled) {
+      const outCustomer = customers.find((p) => p.id === outPartyId)
+      if (!outCustomer) { setError('Hemen çıkış için müşteri seçiniz.'); return }
+      const outSale = parseNonNegativeNumber(outSalePrice)
+      if (outSale == null) { setError('Hemen çıkış için geçerli satış fiyatı giriniz.'); return }
+      if (outCurrency === 'USD') {
+        const fx = parsePositiveNumber(outFxRate)
+        if (fx == null) { setError('Hemen çıkış USD için geçerli kur giriniz.'); return }
+      }
+      if (outQuantity.trim()) {
+        const oq = parsePositiveNumber(outQuantity)
+        if (oq == null) { setError('Geçerli hemen çıkış miktarı giriniz.'); return }
+        if (oq > qty) { setError('Hemen çıkış miktarı giriş miktarından fazla olamaz.'); return }
+      }
+    }
+
     setLoading(true)
     setError(null)
 
@@ -176,6 +291,17 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
           occurredAt: form.occurred_at,
           currency: form.currency,
           fxRate: form.currency === 'USD' ? parsePositiveNumber(form.fxRate) : 1,
+          immediateOut: immediateOutEnabled
+            ? {
+                partyId: outPartyId,
+                ...(outQuantity.trim()
+                  ? { quantity: parsePositiveNumber(outQuantity)! }
+                  : {}),
+                salePrice: parseNonNegativeNumber(outSalePrice)!,
+                currency: outCurrency,
+                fxRate: outCurrency === 'USD' ? parsePositiveNumber(outFxRate) : 1,
+              }
+            : null,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -184,9 +310,17 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
       const unitSuffix = data.unit === 'kg' ? 'kg' : data.unit === 'metre' ? 'm' : ''
       router.refresh()
       onClose()
-      onSuccess(
-        `${data.voucher_number} · ${form.name.trim()} giriş${unitSuffix ? ` (${qty} ${unitSuffix})` : ''} · ₺${Number(data.lineTotal).toFixed(2)}`
-      )
+      let msg = `${data.voucher_number} · ${form.name.trim()} giriş${unitSuffix ? ` (${qty} ${unitSuffix})` : ''} · ₺${Number(data.lineTotal).toFixed(2)}`
+      if (data.cari?.purchase?.netDue != null && data.cari.purchase.creditApplied > 0.005) {
+        msg += ` · tedarikçiye ödenecek ₺${Number(data.cari.purchase.netDue).toFixed(2)}`
+      }
+      if (data.immediateOut) {
+        msg += ` · hemen çıkış ${data.immediateOut.quantity}${unitSuffix ? ` ${unitSuffix}` : ''} → ${data.immediateOut.destination}`
+        if (data.cari?.sale?.netDue != null && data.cari.sale.creditApplied > 0.005) {
+          msg += ` · tahsil ₺${Number(data.cari.sale.netDue).toFixed(2)}`
+        }
+      }
+      onSuccess(msg)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Bir hata oluştu.'
       setError(msg)
@@ -355,6 +489,102 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
             />
           </Field>
         </div>
+
+        {form.partyId && (
+          <PartyBalanceHint
+            balance={supplierBalance}
+            loading={supplierBalanceLoading}
+            mode="purchase"
+            transactionTotal={purchaseTotalTry}
+          />
+        )}
+
+        <ImmediateOutPanel
+          enabled={immediateOutEnabled}
+          onToggle={setImmediateOutEnabled}
+        >
+          <Field label="Müşteri" required>
+            <select
+              value={outPartyId}
+              onChange={(e) => setOutPartyId(e.target.value)}
+              className={inputCls}
+              disabled={loading}
+            >
+              <option value="">Seçiniz</option>
+              {customers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <div className="mt-1">
+              <QuickPartyAdd
+                kind="musteri"
+                disabled={loading}
+                onCreated={(party) => {
+                  setParties((prev) =>
+                    [...prev, { ...party, opening_balance: party.opening_balance ?? 0 }].sort((a, b) =>
+                      a.name.localeCompare(b.name, 'tr')
+                    )
+                  )
+                  setOutPartyId(party.id)
+                }}
+              />
+            </div>
+          </Field>
+
+          <CurrencyFields
+            currency={outCurrency}
+            fxRate={outFxRate}
+            onCurrencyChange={setOutCurrency}
+            onFxRateChange={setOutFxRate}
+            disabled={loading}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label={`Çıkış miktarı${
+                pickingExisting && selectedFabric?.unit
+                  ? ` (${unitLabel(selectedFabric.unit)})`
+                  : form.unit
+                    ? ` (${unitLabel(form.unit)})`
+                    : ''
+              }`}
+            >
+              <input
+                type="number"
+                min="0.01"
+                step="any"
+                value={outQuantity}
+                onChange={(e) => setOutQuantity(e.target.value)}
+                placeholder="Boş = tamamı"
+                className={inputCls}
+                disabled={loading}
+              />
+            </Field>
+            <Field label={`Satış fiyatı (${currencySymbol(outCurrency)})`} required>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={outSalePrice}
+                onChange={(e) => setOutSalePrice(e.target.value)}
+                placeholder="0.00"
+                className={inputCls}
+                disabled={loading}
+              />
+            </Field>
+          </div>
+
+          {outPartyId && (
+            <PartyBalanceHint
+              balance={customerBalance}
+              loading={customerBalanceLoading}
+              mode="sale"
+              transactionTotal={immediateSaleTry}
+            />
+          )}
+        </ImmediateOutPanel>
 
         {error && (
           <p className="text-sm text-danger bg-danger-soft border border-danger/20 rounded-lg px-3 py-2">{error}</p>

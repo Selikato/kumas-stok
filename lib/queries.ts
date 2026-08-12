@@ -1,6 +1,24 @@
 import { supabase } from '@/lib/supabaseClient'
 import type { Party } from '@/lib/cari'
+import { partyBalance } from '@/lib/cari'
 import type { MovementRow } from '@/lib/movements'
+
+export async function fetchPartyBalance(partyId: string): Promise<number> {
+  const { data: party, error: pErr } = await supabase
+    .from('parties')
+    .select('opening_balance')
+    .eq('id', partyId)
+    .single()
+
+  if (pErr || !party) return 0
+
+  const { data: entries } = await supabase
+    .from('account_entries')
+    .select('entry_type, amount')
+    .eq('party_id', partyId)
+
+  return partyBalance(entries ?? [], Number(party.opening_balance) || 0)
+}
 
 export async function fetchParties(): Promise<Party[]> {
   const full = await supabase
