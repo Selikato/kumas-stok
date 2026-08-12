@@ -283,9 +283,9 @@ export default function CariClient({ parties: initialParties, entries: initialEn
                 >
                   <div className="sm:col-span-2">
                     <p className="text-xs text-muted mb-2">
-                      Kumaş dışı borç/alacak için{' '}
-                      <span className="font-medium text-ink">Borç ekle</span> /{' '}
-                      <span className="font-medium text-ink">Alacak ekle</span> seçin (ör. boyahane).
+                      Kumaş dışı işlemler için{' '}
+                      <span className="font-medium text-ink">Alış</span> /{' '}
+                      <span className="font-medium text-ink">Satış</span> seçin (ör. boyahane).
                     </p>
                   </div>
                   <Field label="İşlem">
@@ -297,8 +297,8 @@ export default function CariClient({ parties: initialParties, entries: initialEn
                     >
                       <option value="odeme">Ödeme (borç azalt)</option>
                       <option value="tahsilat">Tahsilat (alacak azalt)</option>
-                      <option value="borc">Borç ekle (manuel)</option>
-                      <option value="alacak">Alacak ekle (manuel)</option>
+                      <option value="borc">Alış</option>
+                      <option value="alacak">Satış</option>
                     </select>
                   </Field>
                   <Field label={`Tutar (${currencySymbol(currency)})`}>

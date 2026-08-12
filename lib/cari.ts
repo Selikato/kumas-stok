@@ -115,8 +115,8 @@ export function partyKindLabel(kind: PartyKind): string {
 
 export function entryTypeLabel(t: AccountEntryType): string {
   switch (t) {
-    case 'borc': return 'Borç (alış)'
-    case 'alacak': return 'Alacak (satış)'
+    case 'borc': return 'Alış'
+    case 'alacak': return 'Satış'
     case 'odeme': return 'Ödeme'
     case 'tahsilat': return 'Tahsilat'
   }
