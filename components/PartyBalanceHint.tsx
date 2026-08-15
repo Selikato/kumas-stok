@@ -7,7 +7,7 @@ import {
   netDueAfterSale,
   netDueAfterPurchase,
 } from '@/lib/cari'
-import { fmt } from '@/lib/helpers'
+import { formatMoneyKdv } from '@/lib/vat'
 
 type Props = {
   balance: number | null
@@ -17,7 +17,7 @@ type Props = {
   transactionTotal: number | null
 }
 
-/** Cari bakiye ve satış/alış sonrası net ödeme/tahsilat özeti */
+/** Cari bakiye ve satış/alış sonrası net ödeme/tahsilat özeti (KDV dahil) */
 export default function PartyBalanceHint({ balance, loading, mode, transactionTotal }: Props) {
   if (loading) {
     return (
@@ -54,7 +54,7 @@ export default function PartyBalanceHint({ balance, loading, mode, transactionTo
           <span className="font-medium text-ink">Bakiye yok</span>
         ) : (
           <span className="font-medium text-ink tabular-nums">
-            {label} ₺{fmt(amount)}
+            {label} {formatMoneyKdv(amount)}
           </span>
         )}
       </div>
@@ -62,7 +62,7 @@ export default function PartyBalanceHint({ balance, loading, mode, transactionTo
       {hasTx && creditApplied > 0.005 && (
         <div className="flex flex-wrap items-baseline gap-x-2 text-accent">
           <span>Mahsup (alacak):</span>
-          <span className="font-medium tabular-nums">₺{fmt(creditApplied)}</span>
+          <span className="font-medium tabular-nums">{formatMoneyKdv(creditApplied)}</span>
         </div>
       )}
 
@@ -70,13 +70,13 @@ export default function PartyBalanceHint({ balance, loading, mode, transactionTo
         <>
           <div className="flex flex-wrap items-baseline gap-x-2">
             <span className="text-muted">{mode === 'sale' ? 'Satış tutarı:' : 'Alış tutarı:'}</span>
-            <span className="font-medium text-ink tabular-nums">₺{fmt(transactionTotal!)}</span>
+            <span className="font-medium text-ink tabular-nums">{formatMoneyKdv(transactionTotal!)}</span>
           </div>
           <div className="flex flex-wrap items-baseline gap-x-2 pt-1 border-t border-line/80">
             <span className="text-muted font-medium">
               {mode === 'sale' ? 'Tahsil edilecek:' : 'Ödenecek:'}
             </span>
-            <span className="font-semibold text-ink tabular-nums">₺{fmt(netDue ?? 0)}</span>
+            <span className="font-semibold text-ink tabular-nums">{formatMoneyKdv(netDue ?? 0)}</span>
           </div>
         </>
       )}

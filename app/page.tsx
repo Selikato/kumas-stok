@@ -82,7 +82,10 @@ async function getFabrics(): Promise<Fabric[]> {
 export default async function Home() {
   const fabrics = await getFabrics()
   const { from, to } = monthRange()
-  const movements = await fetchMovements({ from, to })
+  const [movements, allMovements] = await Promise.all([
+    fetchMovements({ from, to }),
+    fetchMovements({ limit: 2000 }),
+  ])
   const summary = summarizeMovements(movements)
   const girisSummary = summarizeGirisEntries(movements)
   const stockValue = fabrics.reduce((s, f) => s + totalValue(f), 0)
@@ -119,7 +122,7 @@ export default async function Home() {
         </Link>
       </div>
 
-      <FabricList fabrics={fabrics} />
+      <FabricList fabrics={fabrics} movements={allMovements} />
     </PageShell>
   )
 }

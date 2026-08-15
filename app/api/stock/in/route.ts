@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/apiAuth'
 import { generateFabricCode, generateRollNumber } from '@/lib/helpers'
 import { insertRoll, insertMovement, insertAccountEntry } from '@/lib/dbWrites'
 import { fxNote, toTry, type MoneyCurrency } from '@/lib/money'
+import { grossLineTotal } from '@/lib/vat'
 import {
   partyBalance,
   creditAppliedOnSale,
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Seçilen cari tedarikçi değil.' }, { status: 400 })
   }
   const resolvedSource = party.name
-  const lineTotal = qty * price
+  const lineTotal = grossLineTotal(price, qty)
   const fxSuffix = fxNote(currency, fxRate, originalPrice)
 
   try {
@@ -277,7 +278,7 @@ export async function POST(request: Request) {
 
       const dest = outParty.name
       const outFxSuffix = fxNote(outCurrency, outFxRate, originalSale)
-      const saleTotal = outQty * saleTry
+      const saleTotal = grossLineTotal(saleTry, outQty)
       const newQty = Math.max(0, qty - outQty)
 
       const { data: updatedRoll, error: qtyErr } = await sb
@@ -303,7 +304,7 @@ export async function POST(request: Request) {
             amount: outQty,
             occurred_at: occurredAt,
             notes: [
-              `Hemen çıkış | Nereye: ${dest} | Satış: ₺${saleTry}`,
+              `Hemen çıkış | Nereye: ${dest} | Satış: ₺${saleTotal}`,
               outFxSuffix,
             ]
               .filter(Boolean)

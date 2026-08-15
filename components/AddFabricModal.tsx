@@ -15,6 +15,7 @@ import type { Fabric } from '@/app/page'
 import type { Party } from '@/lib/cari'
 import type { MoneyCurrency } from '@/lib/money'
 import { currencySymbol } from '@/lib/money'
+import { formatMoneyKdv, withKdv } from '@/lib/vat'
 import QuickPartyAdd from '@/components/QuickPartyAdd'
 import CurrencyFields from '@/components/CurrencyFields'
 import ImmediateOutPanel from '@/components/ImmediateOutPanel'
@@ -91,13 +92,13 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     const qty = parsePositiveNumber(form.quantity)
     const price = parseNonNegativeNumber(form.unit_price)
     if (qty == null || price == null) return null
-    const gross = qty * price
+    let netTry = qty * price
     if (form.currency === 'USD') {
       const fx = parsePositiveNumber(form.fxRate)
       if (fx == null) return null
-      return gross * fx
+      netTry *= fx
     }
-    return gross
+    return withKdv(netTry)
   }, [form.quantity, form.unit_price, form.currency, form.fxRate])
 
   const immediateSaleTry = useMemo(() => {
@@ -106,13 +107,13 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
     const outQty = outQuantity.trim() ? parsePositiveNumber(outQuantity) : qtyIn
     const sale = parseNonNegativeNumber(outSalePrice)
     if (outQty == null || sale == null) return null
-    const gross = outQty * sale
+    let netTry = outQty * sale
     if (outCurrency === 'USD') {
       const fx = parsePositiveNumber(outFxRate)
       if (fx == null) return null
-      return gross * fx
+      netTry *= fx
     }
-    return gross
+    return withKdv(netTry)
   }, [
     immediateOutEnabled,
     form.quantity,
@@ -310,14 +311,14 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
       const unitSuffix = data.unit === 'kg' ? 'kg' : data.unit === 'metre' ? 'm' : ''
       router.refresh()
       onClose()
-      let msg = `${data.voucher_number} · ${form.name.trim()} giriş${unitSuffix ? ` (${qty} ${unitSuffix})` : ''} · ₺${Number(data.lineTotal).toFixed(2)}`
+      let msg = `${data.voucher_number} · ${form.name.trim()} giriş${unitSuffix ? ` (${qty} ${unitSuffix})` : ''} · ${formatMoneyKdv(Number(data.lineTotal))}`
       if (data.cari?.purchase?.netDue != null && data.cari.purchase.creditApplied > 0.005) {
-        msg += ` · tedarikçiye ödenecek ₺${Number(data.cari.purchase.netDue).toFixed(2)}`
+        msg += ` · tedarikçiye ödenecek ${formatMoneyKdv(Number(data.cari.purchase.netDue))}`
       }
       if (data.immediateOut) {
         msg += ` · hemen çıkış ${data.immediateOut.quantity}${unitSuffix ? ` ${unitSuffix}` : ''} → ${data.immediateOut.destination}`
         if (data.cari?.sale?.netDue != null && data.cari.sale.creditApplied > 0.005) {
-          msg += ` · tahsil ₺${Number(data.cari.sale.netDue).toFixed(2)}`
+          msg += ` · tahsil ${formatMoneyKdv(Number(data.cari.sale.netDue))}`
         }
       }
       onSuccess(msg)
@@ -476,7 +477,7 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
               disabled={loading}
             />
           </Field>
-          <Field label={`Alış fiyatı (${priceSym})`} required>
+          <Field label={`Alış fiyatı (${priceSym}, KDV hariç)`} required>
             <input
               type="number"
               min="0"
@@ -562,7 +563,7 @@ export default function AddFabricModal({ open, fabrics = [], onClose, onSuccess,
                 disabled={loading}
               />
             </Field>
-            <Field label={`Satış fiyatı (${currencySymbol(outCurrency)})`} required>
+            <Field label={`Satış fiyatı (${currencySymbol(outCurrency)}, KDV hariç)`} required>
               <input
                 type="number"
                 min="0"

@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabaseAdmin'
 import { requireSession } from '@/lib/apiAuth'
 import { insertMovement, insertAccountEntry } from '@/lib/dbWrites'
 import { fxNote, toTry, type MoneyCurrency } from '@/lib/money'
+import { grossLineTotal } from '@/lib/vat'
 import {
   partyBalance,
   creditAppliedOnSale,
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
     const unitCost = Number(fresh.unit_price ?? 0)
     const newQty = currentQty - amt
     const costTotal = amt * unitCost
-    const saleTotal = sale != null ? amt * sale : null
+    const saleTotal = sale != null ? grossLineTotal(sale, amt) : null
 
     const { data: updated, error: updateErr } = await sb
       .from('rolls')
@@ -142,7 +143,7 @@ export async function POST(request: Request) {
           movement_type: 'CIKIS',
           amount: amt,
           occurred_at: occurredAt,
-          notes: [`Çıkış | Nereye: ${resolvedDest} | Satış: ₺${sale}`, fxSuffix]
+          notes: [`Çıkış | Nereye: ${resolvedDest} | Satış: ₺${saleTotal ?? sale}`, fxSuffix]
             .filter(Boolean)
             .join(' · '),
           party_id: partyId,
