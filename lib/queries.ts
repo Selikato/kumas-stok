@@ -51,6 +51,7 @@ export async function fetchMovements(opts?: {
   from?: string
   to?: string
   type?: string
+  limit?: number
 }): Promise<MovementRow[]> {
   let q = supabase
     .from('stock_movements')
@@ -70,13 +71,13 @@ export async function fetchMovements(opts?: {
       rolls (
         roll_number,
         variants (
-          fabrics ( name, unit )
+          fabrics ( id, name, unit )
         )
       )
     `)
     .order('occurred_at', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(500)
+    .limit(opts?.limit ?? 500)
 
   if (opts?.from) q = q.gte('occurred_at', opts.from)
   if (opts?.to) q = q.lte('occurred_at', opts.to)
@@ -104,7 +105,7 @@ export async function fetchMovements(opts?: {
     rolls: {
       roll_number: string | null
       variants: {
-        fabrics: { name: string; unit: string | null } | { name: string; unit: string | null }[] | null
+        fabrics: { id: string; name: string; unit: string | null } | { id: string; name: string; unit: string | null }[] | null
       } | { fabrics: unknown }[] | null
     } | null
   }
@@ -133,6 +134,7 @@ export async function fetchMovements(opts?: {
       line_total: row.line_total != null ? Number(row.line_total) : null,
       party_id: row.party_id,
       party_name: party?.name ?? null,
+      fabric_id: fabric?.id ?? null,
       fabric_name: fabric?.name ?? null,
       fabric_unit: fabric?.unit ?? null,
       roll_number: roll?.roll_number ?? null,

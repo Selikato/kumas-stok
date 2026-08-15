@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useState, useTransition } from 'react'
 import type { MovementRow } from '@/lib/movements'
 import {
-  formatMoney,
   isGiris,
   movementMoney,
   movementTypeLabel,
+  formatMovementMoney,
 } from '@/lib/movements'
+import { formatMoneyStock, KDV_LABEL } from '@/lib/vat'
 import { formatQtyWithUnit, formatTRDate, parseNonNegativeNumber, unitLabel } from '@/lib/helpers'
 import { inputCls } from '@/lib/stockHelpers'
 import { deleteMovementViaApi, updateMovementViaApi } from '@/lib/dbWrites'
@@ -207,6 +208,9 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
                   </th>
                   <th className="px-4 py-3 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium text-right">
                     Tutar
+                    <span className="block font-normal normal-case tracking-normal text-[10px] text-muted/80">
+                      alış/satış {KDV_LABEL.toLowerCase()}
+                    </span>
                   </th>
                   <th className="px-4 py-3 font-mono-ui text-[11px] uppercase tracking-wider text-muted font-medium text-right w-28">
                     İşlem
@@ -235,11 +239,11 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
                         {formatQtyWithUnit(m.amount, m.fabric_unit)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-medium text-ink">
-                        {formatMoney(money)}
+                        {formatMovementMoney(m, money)}
                         {!giris && m.unit_cost != null && (
                           <div className="text-[10px] font-normal text-muted">
-                            maliyet {unitLabel(m.fabric_unit) ? `/ ${unitLabel(m.fabric_unit)}` : ''} ₺
-                            {m.unit_cost}
+                            maliyet {formatMoneyStock(m.unit_cost)}
+                            {unitLabel(m.fabric_unit) ? ` / ${unitLabel(m.fabric_unit)}` : ''}
                           </div>
                         )}
                       </td>
@@ -358,7 +362,7 @@ export default function MovementsTable({ movements, from, to, type }: Props) {
                 disabled={saving}
               />
             </Field>
-            <Field label={isGiris(editTarget.movement_type) ? 'Alış fiyatı (₺)' : 'Satış fiyatı (₺)'}>
+            <Field label={isGiris(editTarget.movement_type) ? 'Alış fiyatı (₺, KDV hariç)' : 'Satış fiyatı (₺, KDV hariç)'}>
               <input
                 type="number"
                 min="0"

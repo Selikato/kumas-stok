@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import type { Fabric } from '@/app/page'
-import { fmt, formatQtyWithUnit, formatTRDate, unitLabel } from '@/lib/helpers'
+import type { MovementRow } from '@/lib/movements'
+import { fmt, formatQtyWithUnit, unitLabel } from '@/lib/helpers'
 import {
   totalRolls,
   totalQty,
@@ -11,10 +12,15 @@ import {
   fabricRouteSummary,
 } from '@/lib/fabricStats'
 import { inputCls } from '@/lib/stockHelpers'
-import { sortRollsFifo } from '@/lib/fifo'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/Accordion'
+import FabricStockDetail from '@/components/FabricStockDetail'
 
-export default function FabricList({ fabrics }: { fabrics: Fabric[] }) {
+type Props = {
+  fabrics: Fabric[]
+  movements: MovementRow[]
+}
+
+export default function FabricList({ fabrics, movements }: Props) {
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
 
@@ -138,10 +144,7 @@ export default function FabricList({ fabrics }: { fabrics: Fabric[] }) {
                   </AccordionTrigger>
 
                   <AccordionContent>
-                    <p className="text-[11px] uppercase tracking-wider text-muted font-medium mb-3">
-                      Stok kayıtları · giriş tarihine göre
-                    </p>
-                    <VariantDetail variants={fabric.variants} unit={fabric.unit} />
+                    <FabricStockDetail fabric={fabric} movements={movements} />
                   </AccordionContent>
                 </AccordionItem>
               )
@@ -174,50 +177,6 @@ function StatCard({
         {label}
       </p>
       <p className={`text-xl font-semibold mt-1.5 tabular-nums ${highlight ? 'text-white' : 'text-ink'}`}>{value}</p>
-    </div>
-  )
-}
-
-function VariantDetail({
-  variants,
-  unit,
-}: {
-  variants: Fabric['variants']
-  unit: string | null
-}) {
-  const rolls = sortRollsFifo(
-    variants
-      .flatMap((v) => v.rolls)
-      .filter((r) => (r.quantity ?? 0) > 0)
-  )
-
-  if (rolls.length === 0) {
-    return <p className="text-sm text-muted italic">Aktif stok kaydı yok.</p>
-  }
-
-  return (
-    <div className="space-y-2">
-      {rolls.map((r, idx) => (
-        <div
-          key={r.id}
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs rounded-lg border px-3 py-2.5 bg-paper/40 border-line/80 text-muted"
-        >
-          <span
-            className="shrink-0 w-5 h-5 rounded-full bg-surface border border-line text-[10px] font-mono-ui flex items-center justify-center text-muted"
-            title="Giriş sırası (eski önce)"
-          >
-            {idx + 1}
-          </span>
-          {r.received_at && (
-            <span className="font-medium text-ink tabular-nums">{formatTRDate(r.received_at)}</span>
-          )}
-          {r.roll_number && <span className="font-mono-ui text-ink-soft">{r.roll_number}</span>}
-          <span className="font-medium text-ink tabular-nums">{formatQtyWithUnit(r.quantity ?? 0, unit)}</span>
-          {r.unit_price != null && <span className="tabular-nums">₺{fmt(r.unit_price)}</span>}
-          {r.lot_number && <span>Nereden: {r.lot_number}</span>}
-          {r.location && <span>Depo: {r.location}</span>}
-        </div>
-      ))}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { type SupabaseClient } from '@supabase/supabase-js'
 import { nextVoucherNumber } from '@/lib/vouchers'
 import { supabase as browserClient } from '@/lib/supabaseClient'
+import { grossLineTotal } from '@/lib/vat'
 
 function clientOrDefault(client?: SupabaseClient) {
   return client ?? browserClient
@@ -355,7 +356,11 @@ export async function updateMovement(
   if (!nextDate) throw new Error('Tarih zorunlu.')
 
   const nextLineTotal =
-    nextUnitPrice != null ? amount * nextUnitPrice : mv.line_total != null ? Number(mv.line_total) : null
+    nextUnitPrice != null
+      ? grossLineTotal(nextUnitPrice, amount)
+      : mv.line_total != null
+        ? Number(mv.line_total)
+        : null
 
   const updatePayload: Record<string, unknown> = {
     occurred_at: nextDate,

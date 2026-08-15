@@ -1,4 +1,5 @@
-import { formatMoney, type GirisEntrySummary } from '@/lib/movements'
+import { formatMoneyKdv, formatMoneyStock, KDV_LABEL } from '@/lib/vat'
+import type { GirisEntrySummary } from '@/lib/movements'
 import { fmtQty, formatTRDate, formatQtyWithUnit } from '@/lib/helpers'
 
 type Props = {
@@ -25,27 +26,30 @@ export default function PeriodSummary({
   girisSummary,
 }: Props) {
   const brutKar = cikisSatis - cikisMaliyet
+  const brutKarLabel = formatMoneyKdv(brutKar)
 
   return (
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-ink">{title}</h2>
-          <p className="text-xs text-muted mt-0.5">{movementCount} hareket · stok değeri anlık</p>
+          <p className="text-xs text-muted mt-0.5">
+            {movementCount} hareket · stok fiyatları KDV hariç · alış/satış {KDV_LABEL.toLowerCase()}
+          </p>
         </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Card label="Giriş tutarı" value={formatMoney(girisTutar)} />
-        <Card label="Çıkış maliyeti" value={formatMoney(cikisMaliyet)} />
-        <Card label="Çıkış satış" value={formatMoney(cikisSatis)} />
+        <Card label="Giriş tutarı" value={formatMoneyKdv(girisTutar)} />
+        <Card label="Çıkış maliyeti" value={formatMoneyStock(cikisMaliyet)} />
+        <Card label="Çıkış satış" value={formatMoneyKdv(cikisSatis)} />
         <Card
           label="Brüt kâr (satış−maliyet)"
-          value={formatMoney(brutKar)}
+          value={brutKarLabel}
           highlight={brutKar >= 0}
           danger={brutKar < 0}
         />
         <Card label="Miktar G / Ç" value={`${fmtQty(girisQty)} / ${fmtQty(cikisQty)}`} />
-        <Card label="Stok değeri" value={formatMoney(stockValue)} dark />
+        <Card label="Stok değeri" value={formatMoneyStock(stockValue)} dark />
       </div>
 
       {girisSummary && girisSummary.lines.length > 0 && (
@@ -61,7 +65,7 @@ function GirisCalculationTable({ summary }: { summary: GirisEntrySummary }) {
       <div className="px-4 py-3 border-b border-line bg-paper/50">
         <h3 className="text-sm font-medium text-ink">Giriş hesaplama</h3>
         <p className="text-[11px] text-muted mt-0.5">
-          Miktar × fiyat = ara toplam · {summary.lines.length} giriş kaydı
+          Miktar × fiyat = ara toplam · {summary.lines.length} giriş kaydı · stok fiyatları KDV hariç
         </p>
       </div>
 
@@ -99,10 +103,10 @@ function GirisCalculationTable({ summary }: { summary: GirisEntrySummary }) {
                   {formatQtyWithUnit(line.amount, line.fabric_unit)}
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-muted">
-                  {line.unit_price != null ? formatMoney(line.unit_price) : '—'}
+                  {line.unit_price != null ? formatMoneyStock(line.unit_price) : '—'}
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-ink">
-                  {formatMoney(line.line_total)}
+                  {formatMoneyStock(line.line_total)}
                 </td>
               </tr>
             ))}
@@ -125,7 +129,7 @@ function GirisCalculationTable({ summary }: { summary: GirisEntrySummary }) {
                   Ortalama fiyat
                 </p>
                 <p className="text-base font-bold tabular-nums text-ink mt-0.5">
-                  {summary.avgPrice != null ? formatMoney(summary.avgPrice) : '—'}
+                  {summary.avgPrice != null ? formatMoneyStock(summary.avgPrice) : '—'}
                 </p>
               </td>
               <td className="px-4 py-3 text-right">
@@ -133,7 +137,7 @@ function GirisCalculationTable({ summary }: { summary: GirisEntrySummary }) {
                   Genel toplam
                 </p>
                 <p className="text-base font-bold tabular-nums text-ink mt-0.5">
-                  {formatMoney(summary.totalAmount)}
+                  {formatMoneyStock(summary.totalAmount)}
                 </p>
               </td>
             </tr>

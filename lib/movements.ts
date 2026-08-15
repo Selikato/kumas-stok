@@ -1,4 +1,5 @@
 import { fmt } from '@/lib/helpers'
+import { formatMoneyKdv, grossLineTotal } from '@/lib/vat'
 
 export type MovementRow = {
   id: string
@@ -13,6 +14,7 @@ export type MovementRow = {
   line_total: number | null
   party_id: string | null
   party_name?: string | null
+  fabric_id?: string | null
   fabric_name?: string | null
   fabric_unit?: string | null
   roll_number?: string | null
@@ -31,15 +33,10 @@ export function isGiris(t: string): boolean {
 }
 
 export function movementMoney(m: MovementRow): number | null {
-  // Giriş: alış tutarı; çıkış: satış tutarı (line_total)
   if (m.line_total != null) return Number(m.line_total)
-  if (isGiris(m.movement_type) && m.unit_price != null) {
-    return Number(m.amount) * Number(m.unit_price)
-  }
-  if (!isGiris(m.movement_type) && m.unit_price != null) {
-    return Number(m.amount) * Number(m.unit_price)
-  }
-  return null
+  if (m.unit_price == null) return null
+  // Birim fiyat KDV hariç; alış ve satış tutarı aynı şekilde KDV dahil
+  return grossLineTotal(Number(m.unit_price), Number(m.amount))
 }
 
 /** Çıkış satırının stok maliyeti (alış birim fiyatı × miktar) */
@@ -52,6 +49,12 @@ export function movementCost(m: MovementRow): number | null {
 export function formatMoney(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return '—'
   return `₺${fmt(n)}`
+}
+
+/** Giriş/çıkış hareket tutarı — DB'de KDV dahil saklanır */
+export function formatMovementMoney(m: MovementRow, money: number | null | undefined): string {
+  if (money == null || Number.isNaN(money)) return '—'
+  return formatMoneyKdv(money)
 }
 
 /** Ayın ilk ve son günü (local) */
@@ -112,7 +115,7 @@ export function summarizeGirisEntries(rows: MovementRow[]): GirisEntrySummary {
     .map((m) => {
       const amount = Number(m.amount)
       const unit_price = m.unit_price != null ? Number(m.unit_price) : null
-      const line_total = movementMoney(m) ?? (unit_price != null ? amount * unit_price : 0)
+      const line_total = unit_price != null ? amount * unit_price : 0
       return {
         id: m.id,
         occurred_at: m.occurred_at,

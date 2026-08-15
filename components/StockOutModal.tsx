@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { fmt, parsePositiveNumber, parseNonNegativeNumber, todayISODate, unitLabel, formatTRDate } from '@/lib/helpers'
+import { parsePositiveNumber, parseNonNegativeNumber, todayISODate, unitLabel, formatTRDate } from '@/lib/helpers'
+import { formatMoneyKdv, formatMoneyStock, withKdv } from '@/lib/vat'
 import { inputCls } from '@/lib/stockHelpers'
 import type { Fabric, Roll } from '@/app/page'
 import { totalQty } from '@/lib/fabricStats'
@@ -86,13 +87,13 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
       qtyTotal += amt
     }
     if (qtyTotal <= 0) return null
-    const gross = qtyTotal * sale
+    let netTry = qtyTotal * sale
     if (currency === 'USD') {
       const fx = parsePositiveNumber(fxRate)
       if (fx == null) return null
-      return gross * fx
+      netTry *= fx
     }
-    return gross
+    return withKdv(netTry)
   }, [salePrice, selectedIds, amounts, currency, fxRate])
 
   useEffect(() => {
@@ -255,14 +256,14 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
         data.voucher_number,
         fabric.name,
         `${data.totalAmt}${unit ? ` ${unit}` : ''}`,
-        `maliyet ₺${fmt(Number(data.totalCost || 0))}`,
+        `maliyet ${formatMoneyStock(Number(data.totalCost || 0))}`,
       ]
-      if (Number(data.totalSale) > 0) parts.push(`satış ₺${fmt(Number(data.totalSale))}`)
+      if (Number(data.totalSale) > 0) parts.push(`satış ${formatMoneyKdv(Number(data.totalSale))}`)
       if (data.cari?.creditApplied > 0.005) {
-        parts.push(`mahsup ₺${fmt(Number(data.cari.creditApplied))}`)
+        parts.push(`mahsup ${formatMoneyKdv(Number(data.cari.creditApplied))}`)
       }
       if (data.cari?.netDue != null && Number(data.cari.netDue) >= 0) {
-        parts.push(`tahsil ₺${fmt(Number(data.cari.netDue))}`)
+        parts.push(`tahsil ${formatMoneyKdv(Number(data.cari.netDue))}`)
       }
       parts.push(`→ ${dest}`)
       onSuccess(parts.filter(Boolean).join(' · '))
@@ -391,7 +392,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
                           <span>
                             {r.lot_number ? `${r.lot_number}` : 'Kayıt'}
                             {` · ${r.quantity}${unit ? ` ${unit}` : ''}`}
-                            {r.unit_price != null ? ` · maliyet ₺${fmt(r.unit_price)}` : ''}
+                            {r.unit_price != null ? ` · maliyet ${formatMoneyStock(r.unit_price)}` : ''}
                             {r.received_at ? ` · ${formatTRDate(r.received_at)}` : ''}
                           </span>
                         </span>
@@ -462,7 +463,7 @@ export default function StockOutModal({ open, fabrics, onClose, onSuccess, onErr
               disabled={loading}
             />
 
-            <Field label={`Satış fiyatı (${currencySymbol(currency)})`} required>
+            <Field label={`Satış fiyatı (${currencySymbol(currency)}, KDV hariç)`} required>
               <input
                 type="number"
                 min="0"
