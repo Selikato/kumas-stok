@@ -3,20 +3,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  buildPartyStatement,
   entryTypeLabel,
   formatBalance,
   isReverseBalance,
   partyBalance,
   partyKindLabel,
-  paymentMethodLabel,
   type AccountEntry,
   type AccountEntryType,
   type Party,
   type PartyKind,
 } from '@/lib/cari'
 import { insertAccountEntry } from '@/lib/dbWrites'
-import { formatTRDate, todayISODate, parsePositiveNumber } from '@/lib/helpers'
-import { formatEntryAmount, formatMoneyKdv, KDV_LABEL, withKdv } from '@/lib/vat'
+import { todayISODate, parsePositiveNumber } from '@/lib/helpers'
+import { yearRange } from '@/lib/movements'
+import { formatMoneyKdv, KDV_LABEL, withKdv } from '@/lib/vat'
+import CariStatementTable from '@/components/CariStatementTable'
 import { inputCls } from '@/lib/stockHelpers'
 import { fxNote, toTry, currencySymbol, type MoneyCurrency } from '@/lib/money'
 import CurrencyFields from '@/components/CurrencyFields'
@@ -51,6 +53,9 @@ export default function CariClient({ parties: initialParties, entries: initialEn
   const [resetChecked, setResetChecked] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const year = yearRange()
+  const [ekstreFrom, setEkstreFrom] = useState(year.from)
+  const [ekstreTo, setEkstreTo] = useState(year.to)
 
   useEffect(() => {
     setEntries(initialEntries)
@@ -95,10 +100,15 @@ export default function CariClient({ parties: initialParties, entries: initialEn
 
   const selected = parties.find((p) => p.id === selectedId) ?? null
 
-  const partyEntries = entries
-    .filter((e) => e.party_id === selectedId)
-    .slice()
-    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+  const statement = useMemo(
+    () =>
+      buildPartyStatement(
+        entries.filter((e) => e.party_id === selectedId),
+        Number(selected?.opening_balance) || 0,
+        { from: ekstreFrom, to: ekstreTo }
+      ),
+    [entries, selectedId, selected?.opening_balance, ekstreFrom, ekstreTo]
+  )
 
   function grossFromInput(rawAmount: string): number | null {
     const original = parseFloat(rawAmount)
@@ -581,35 +591,22 @@ export default function CariClient({ parties: initialParties, entries: initialEn
             </div>
 
             <div className="bg-surface rounded-xl border border-line overflow-hidden shadow-[0_1px_2px_rgba(15,28,46,0.04)]">
-              <PanelHeader title="Hareketler" subtitle={`Bu cariye ait kayıtlar · ${KDV_LABEL.toLowerCase()}`} />
-              {partyEntries.length === 0 ? (
-                <p className="text-sm text-muted p-6 text-center">Hareket yok.</p>
-              ) : (
-                <ul className="divide-y divide-line">
-                  {partyEntries.map((e) => (
-                    <li key={e.id} className="px-4 py-3.5 flex items-center justify-between gap-3 text-sm">
-                      <div className="min-w-0">
-                        <p className="font-medium text-ink">
-                          {entryTypeLabel(e.entry_type)}
-                          {(e.entry_type === 'odeme' || e.entry_type === 'tahsilat') && e.payment_method ? (
-                            <span className="ml-1.5 text-xs font-normal text-muted">
-                              · {paymentMethodLabel(e.payment_method)}
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="text-xs text-muted mt-0.5">
-                          {formatTRDate(e.occurred_at)}
-                          {e.voucher_number ? ` · ${e.voucher_number}` : ''}
-                          {e.notes ? ` · ${e.notes}` : ''}
-                        </p>
-                      </div>
-                      <p className="font-semibold tabular-nums text-ink shrink-0">
-                        {formatEntryAmount(Number(e.amount), e.movement_id)}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <PanelHeader
+                title="Hareket ekstresi"
+                subtitle={`Borç / alacak · yürüyen bakiye · ${KDV_LABEL.toLowerCase()}`}
+              />
+              <CariStatementTable
+                rows={statement.rows}
+                totalBorc={statement.totalBorc}
+                totalAlacak={statement.totalAlacak}
+                closingBalance={statement.closingBalance}
+                from={ekstreFrom}
+                to={ekstreTo}
+                onRangeChange={(f, t) => {
+                  setEkstreFrom(f)
+                  setEkstreTo(t)
+                }}
+              />
             </div>
           </>
         ) : (

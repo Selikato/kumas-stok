@@ -2,16 +2,10 @@
 
 import type { Fabric } from '@/app/page'
 import type { MovementRow } from '@/lib/movements'
-import {
-  isGiris,
-  movementMoney,
-  movementTypeLabel,
-  formatMovementMoney,
-} from '@/lib/movements'
+import { buildFabricLedger } from '@/lib/movements'
 import { groupStockByLot } from '@/lib/fabricStats'
 import { formatQtyWithUnit, formatTRDate } from '@/lib/helpers'
-import { formatMoneyStock, KDV_LABEL } from '@/lib/vat'
-import Badge from '@/components/ui/Badge'
+import { formatMoneyStock, formatMoneyKdv, KDV_LABEL } from '@/lib/vat'
 import { sortRollsFifo } from '@/lib/fifo'
 
 type Props = {
@@ -20,10 +14,7 @@ type Props = {
 }
 
 export default function FabricStockDetail({ fabric, movements }: Props) {
-  const fabricMovements = movements
-    .filter((m) => m.fabric_id === fabric.id)
-    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at) || b.id.localeCompare(a.id))
-
+  const ledger = buildFabricLedger(movements.filter((m) => m.fabric_id === fabric.id))
   const lotGroups = groupStockByLot(fabric)
   const fifoRolls = sortRollsFifo(
     fabric.variants.flatMap((v) => v.rolls).filter((r) => (r.quantity ?? 0) > 0)
@@ -115,18 +106,18 @@ export default function FabricStockDetail({ fabric, movements }: Props) {
       <section>
         <div className="flex items-baseline justify-between gap-2 mb-3">
           <h4 className="text-[11px] uppercase tracking-wider text-muted font-medium">
-            Giriş / çıkış hareketleri
+            Giriş / çıkış ekstresi
           </h4>
           <span className="text-[10px] text-muted">
-            {fabricMovements.length} kayıt · alış/satış {KDV_LABEL.toLowerCase()}
+            {ledger.rows.length} kayıt · alış/satış {KDV_LABEL.toLowerCase()}
           </span>
         </div>
 
-        {fabricMovements.length === 0 ? (
+        {ledger.rows.length === 0 ? (
           <p className="text-sm text-muted italic">Bu kumaş için hareket kaydı yok.</p>
         ) : (
           <div className="rounded-lg border border-line overflow-x-auto">
-            <table className="w-full text-sm min-w-[36rem]">
+            <table className="w-full text-sm min-w-[48rem]">
               <thead>
                 <tr className="border-b border-line bg-paper/50 text-left">
                   <th className="px-3 py-2 font-mono-ui text-[10px] uppercase tracking-wider text-muted font-medium">
@@ -136,52 +127,78 @@ export default function FabricStockDetail({ fabric, movements }: Props) {
                     Fiş
                   </th>
                   <th className="px-3 py-2 font-mono-ui text-[10px] uppercase tracking-wider text-muted font-medium">
-                    Tür
-                  </th>
-                  <th className="px-3 py-2 font-mono-ui text-[10px] uppercase tracking-wider text-muted font-medium">
                     Cari
                   </th>
                   <th className="px-3 py-2 font-mono-ui text-[10px] uppercase tracking-wider text-muted font-medium text-right">
-                    Miktar
+                    Giriş miktar
                   </th>
                   <th className="px-3 py-2 font-mono-ui text-[10px] uppercase tracking-wider text-muted font-medium text-right">
-                    Tutar
+                    Giriş tutar
+                  </th>
+                  <th className="px-3 py-2 font-mono-ui text-[10px] uppercase tracking-wider text-muted font-medium text-right">
+                    Çıkış miktar
+                  </th>
+                  <th className="px-3 py-2 font-mono-ui text-[10px] uppercase tracking-wider text-muted font-medium text-right">
+                    Çıkış tutar
+                  </th>
+                  <th className="px-3 py-2 font-mono-ui text-[10px] uppercase tracking-wider text-muted font-medium text-right">
+                    Kalan
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {fabricMovements.map((m) => {
-                  const giris = isGiris(m.movement_type)
-                  const money = movementMoney(m)
-                  return (
-                    <tr key={m.id} className="hover:bg-paper/30">
-                      <td className="px-3 py-2.5 text-ink-soft whitespace-nowrap">
-                        {formatTRDate(m.occurred_at)}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono-ui text-xs text-muted">
-                        {m.voucher_number || '—'}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <Badge tone={giris ? 'ok' : 'out'}>{movementTypeLabel(m.movement_type)}</Badge>
-                      </td>
-                      <td className="px-3 py-2.5 text-xs text-muted max-w-[8rem] truncate">
-                        {m.party_name || '—'}
-                      </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-ink">
-                        {formatQtyWithUnit(m.amount, fabric.unit)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums font-medium text-ink">
-                        {formatMovementMoney(m, money)}
-                        {!giris && m.unit_cost != null && (
-                          <div className="text-[10px] font-normal text-muted">
-                            maliyet {formatMoneyStock(m.unit_cost)}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
+                {ledger.rows.map((r) => (
+                  <tr key={r.id} className="hover:bg-paper/30">
+                    <td className="px-3 py-2.5 text-ink-soft whitespace-nowrap">
+                      {formatTRDate(r.occurred_at)}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono-ui text-xs text-muted">{r.voucher || '—'}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted max-w-[8rem] truncate">
+                      {r.party_name || '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-ok">
+                      {r.girisQty > 0 ? formatQtyWithUnit(r.girisQty, fabric.unit) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-ok">
+                      {r.girisTutar != null ? formatMoneyKdv(r.girisTutar) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-danger">
+                      {r.cikisQty > 0 ? formatQtyWithUnit(r.cikisQty, fabric.unit) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-danger">
+                      {r.cikisTutar != null ? formatMoneyKdv(r.cikisTutar) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium text-ink">
+                      {formatQtyWithUnit(r.remainingQty, fabric.unit)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-ink/20 bg-paper/70 font-medium">
+                  <td colSpan={3} className="px-3 py-2.5 text-ink">
+                    Genel toplam ({ledger.rows.length} kayıt)
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-ok">
+                    {formatQtyWithUnit(ledger.totalGirisQty, fabric.unit)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-ok">
+                    {formatMoneyKdv(ledger.totalGirisTutar)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-danger">
+                    {formatQtyWithUnit(ledger.totalCikisQty, fabric.unit)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-danger">
+                    {formatMoneyKdv(ledger.totalCikisTutar)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-ink">
+                    {formatQtyWithUnit(
+                      ledger.rows[ledger.rows.length - 1]?.remainingQty ?? 0,
+                      fabric.unit
+                    )}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}

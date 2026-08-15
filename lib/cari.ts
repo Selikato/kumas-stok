@@ -145,3 +145,116 @@ export function paymentMethodLabel(m: string | null | undefined): string {
   if (!m) return ''
   return PAYMENT_METHODS.find((x) => x.value === m)?.label || m
 }
+
+export function entryTypeLabelDetailed(e: Pick<AccountEntry, 'entry_type' | 'movement_id'>): string {
+  if (e.entry_type === 'alacak' && e.movement_id) return 'Alacak (satış)'
+  if (e.entry_type === 'borc' && e.movement_id) return 'Borç (alış)'
+  return entryTypeLabel(e.entry_type)
+}
+
+/**
+ * Uygulama bakiyesi ile aynı yön:
+ * Alacak kolonu bakiyeyi + yapar (onlar bize borçlu), borç kolonu − yapar.
+ */
+export function entryDebitCredit(type: AccountEntryType, amount: number): { borc: number; alacak: number } {
+  const a = Number(amount) || 0
+  if (type === 'alacak' || type === 'odeme') return { borc: 0, alacak: a }
+  return { borc: a, alacak: 0 }
+}
+
+export type PartyStatementRow = {
+  id: string
+  occurred_at: string
+  label: string
+  voucher: string | null
+  notes: string | null
+  payment_method: string | null
+  borc: number
+  alacak: number
+  balance: number
+  isOpening: boolean
+}
+
+export function buildPartyStatement(
+  entries: AccountEntry[],
+  openingBalance = 0,
+  range?: { from?: string; to?: string }
+): {
+  rows: PartyStatementRow[]
+  totalBorc: number
+  totalAlacak: number
+  closingBalance: number
+} {
+  const from = range?.from?.slice(0, 10) || ''
+  const to = range?.to?.slice(0, 10) || ''
+
+  const chrono = entries.slice().sort((a, b) => {
+    const d = a.occurred_at.localeCompare(b.occurred_at)
+    return d !== 0 ? d : a.id.localeCompare(b.id)
+  })
+
+  let running = Number(openingBalance) || 0
+  const rows: PartyStatementRow[] = []
+
+  const inRange = (date: string) => {
+    const d = date.slice(0, 10)
+    if (from && d < from) return 'before'
+    if (to && d > to) return 'after'
+    return 'in'
+  }
+
+  for (const e of chrono) {
+    const pos = inRange(e.occurred_at)
+    if (pos === 'after') continue
+    const { borc, alacak } = entryDebitCredit(e.entry_type, e.amount)
+    running += alacak - borc
+    if (pos === 'before') continue
+    const method = paymentMethodLabel(e.payment_method)
+    rows.push({
+      id: e.id,
+      occurred_at: e.occurred_at,
+      label: entryTypeLabelDetailed(e),
+      voucher: e.voucher_number,
+      notes: [e.notes, method].filter(Boolean).join(' · ') || null,
+      payment_method: e.payment_method,
+      borc,
+      alacak,
+      balance: running,
+      isOpening: false,
+    })
+  }
+
+  const openingAtStart = (() => {
+    let bal = Number(openingBalance) || 0
+    if (!from) return bal
+    for (const e of chrono) {
+      if (e.occurred_at.slice(0, 10) >= from) break
+      const { borc, alacak } = entryDebitCredit(e.entry_type, e.amount)
+      bal += alacak - borc
+    }
+    return bal
+  })()
+
+  if (Math.abs(openingAtStart) > 0.005) {
+    const formatted = formatBalance(openingAtStart)
+    rows.unshift({
+      id: '__opening__',
+      occurred_at: from || '',
+      label: 'Devir',
+      voucher: null,
+      notes: `Başlangıç bakiyesi (${formatted.label})`,
+      payment_method: null,
+      borc: openingAtStart < 0 ? formatted.amount : 0,
+      alacak: openingAtStart > 0 ? formatted.amount : 0,
+      balance: openingAtStart,
+      isOpening: true,
+    })
+  }
+
+  const periodRows = rows.filter((r) => !r.isOpening)
+  const totalBorc = periodRows.reduce((s, r) => s + r.borc, 0)
+  const totalAlacak = periodRows.reduce((s, r) => s + r.alacak, 0)
+  const closingBalance = rows.length ? rows[rows.length - 1].balance : openingAtStart
+
+  return { rows, totalBorc, totalAlacak, closingBalance }
+}

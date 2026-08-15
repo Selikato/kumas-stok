@@ -67,6 +67,12 @@ export function monthRange(d = new Date()): { from: string; to: string } {
   return { from, to }
 }
 
+/** Yılın ilk ve son günü (ekstre varsayılanı) */
+export function yearRange(d = new Date()): { from: string; to: string } {
+  const y = d.getFullYear()
+  return { from: `${y}-01-01`, to: `${y}-12-31` }
+}
+
 export function summarizeMovements(rows: MovementRow[]) {
   let girisQty = 0
   let cikisQty = 0
@@ -148,4 +154,66 @@ export function summarizeGirisEntries(rows: MovementRow[]): GirisEntrySummary {
     avgPrice: totalQty > 0.005 ? totalAmount / totalQty : null,
     qtyLabel,
   }
+}
+
+export type FabricLedgerRow = {
+  id: string
+  occurred_at: string
+  voucher: string | null
+  party_name: string | null
+  notes: string | null
+  girisQty: number
+  girisTutar: number | null
+  cikisQty: number
+  cikisTutar: number | null
+  remainingQty: number
+}
+
+export function buildFabricLedger(movements: MovementRow[]): {
+  rows: FabricLedgerRow[]
+  totalGirisQty: number
+  totalCikisQty: number
+  totalGirisTutar: number
+  totalCikisTutar: number
+} {
+  const chrono = movements.slice().sort((a, b) => {
+    const d = a.occurred_at.localeCompare(b.occurred_at)
+    return d !== 0 ? d : a.id.localeCompare(b.id)
+  })
+
+  let remaining = 0
+  let totalGirisQty = 0
+  let totalCikisQty = 0
+  let totalGirisTutar = 0
+  let totalCikisTutar = 0
+  const rows: FabricLedgerRow[] = []
+
+  for (const m of chrono) {
+    const qty = Number(m.amount) || 0
+    const money = movementMoney(m)
+    const giris = isGiris(m.movement_type)
+    if (giris) {
+      remaining += qty
+      totalGirisQty += qty
+      if (money != null) totalGirisTutar += money
+    } else {
+      remaining -= qty
+      totalCikisQty += qty
+      if (money != null) totalCikisTutar += money
+    }
+    rows.push({
+      id: m.id,
+      occurred_at: m.occurred_at,
+      voucher: m.voucher_number,
+      party_name: m.party_name ?? null,
+      notes: m.notes,
+      girisQty: giris ? qty : 0,
+      girisTutar: giris ? money : null,
+      cikisQty: giris ? 0 : qty,
+      cikisTutar: giris ? null : money,
+      remainingQty: remaining,
+    })
+  }
+
+  return { rows, totalGirisQty, totalCikisQty, totalGirisTutar, totalCikisTutar }
 }
